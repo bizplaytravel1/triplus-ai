@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>트리플러스 AI 검색</title>
+
+<!-- Firebase (compat 버전 - 간단하게 쓰기) -->
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+:root {
+  --bg: #f0f4ff;
+  --surface: #ffffff;
+  --surface2: #e8eef8;
+  --border: #d0d9ee;
+  --accent: #2563eb;
+  --accent2: #059669;
+  --accent3: #dc2626;
+  --text: #1a1f36;
+  --text2: #4b5680;
+  --text3: #94a3c0;
+  --warn: #f59e0b;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Noto Sans KR', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; font-size: 14px; line-height: 1.6; }
+
+header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 32px; display: flex; align-items: center; gap: 16px; position: sticky; top: 0; z-index: 200; }
+.logo-icon { width: 36px; height: 36px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+.logo-text { font-size: 15px; font-weight: 700; }
+.logo-sub { font-size: 11px; color: var(--text2); margin-top: 1px; }
+.hdr-right { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+
+.status-badge { font-size: 11px; font-family: 'IBM Plex Mono', monospace; padding: 4px 10px; border-radius: 20px; font-weight: 600; white-space: nowrap; }
+.status-ok { background: rgba(5, 150, 105, 0.12); color: var(--accent2); border: 1px solid rgba(5, 150, 105, 0.3); }
+.status-warn { background: rgba(245, 158, 11, 0.15); color: var(--warn); border: 1px solid rgba(245, 158, 11, 0.3); }
+.status-err { background: rgba(220, 38, 38, 0.12); color: var(--accent3); border: 1px solid rgba(220, 38, 38, 0.3); }
+
+.main { max-width: 920px; margin: 0 auto; padding: 32px 24px 80px; }
+.welcome { text-align: center; padding: 40px 20px; }
+.welcome h1 { font-size: 24px; font-weight: 700; margin-bottom: 8px; background: linear-gradient(135deg, var(--accent), var(--accent2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.welcome p { color: var(--text2); font-size: 14px; margin-bottom: 24px; }
+
+.search-box { display: flex; gap: 10px; margin-bottom: 16px; }
+.search-input-wrap { flex: 1; background: var(--surface); border: 1.5px solid var(--border); border-radius: 12px; display: flex; align-items: center; padding: 0 18px; transition: all 0.2s; }
+.search-input-wrap:focus-within { border-color: var(--accent); box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1); }
+.si-icon { color: var(--text3); margin-right: 12px; font-size: 16px; }
+.search-input { flex: 1; background: none; border: none; outline: none; color: var(--text); font-family: 'Noto Sans KR', sans-serif; font-size: 15px; padding: 16px 0; }
+.search-input::placeholder { color: var(--text3); }
+.search-btn { background: var(--accent); color: #fff; border: none; cursor: pointer; border-radius: 12px; padding: 0 24px; font-family: 'Noto Sans KR', sans-serif; font-size: 14px; font-weight: 600; transition: all 0.15s; white-space: nowrap; min-width: 90px; }
+.search-btn:hover { background: #1d4ed8; }
+.search-btn:disabled { background: var(--text3); cursor: not-allowed; }
+
+.chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 24px; align-items: center; }
+.chips-label { font-size: 12px; color: var(--text3); margin-right: 4px; }
+.chip { background: var(--surface); border: 1px solid var(--border); color: var(--text2); border-radius: 20px; padding: 5px 12px; font-size: 12px; cursor: pointer; font-family: 'Noto Sans KR', sans-serif; transition: all 0.15s; }
+.chip:hover { border-color: var(--accent2); color: var(--accent2); }
+
+.ai-box { background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: 12px; padding: 24px 28px; margin-bottom: 24px; display: none; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04); }
+.ai-box.on { display: block; animation: fadeIn 0.4s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.ai-hdr { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+.ai-badge { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; font-size: 10px; font-weight: 700; padding: 3px 10px; border-radius: 4px; letter-spacing: 0.05em; }
+.ai-sub { font-size: 13px; color: var(--text2); }
+.ai-content { font-size: 14.5px; line-height: 1.85; color: var(--text); }
+.ai-content strong { color: var(--accent); font-weight: 700; }
+.ai-content h3 { color: var(--accent); font-size: 14px; margin-top: 18px; margin-bottom: 8px; }
+.ai-content p { margin: 8px 0 12px; }
+.ai-content ul, .ai-content ol { margin: 8px 0 16px; padding-left: 22px; }
+.ai-content li { margin-bottom: 4px; }
+.ai-content table { border-collapse: collapse; margin: 12px 0 18px; width: 100%; font-size: 13.5px; }
+.ai-content th, .ai-content td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; }
+.ai-content th { background: var(--surface2); font-weight: 600; }
+.ai-content code { background: var(--surface2); padding: 1px 6px; border-radius: 4px; font-family: 'IBM Plex Mono', monospace; font-size: 13px; }
+
+.ai-loading { display: flex; align-items: center; gap: 12px; color: var(--text2); font-size: 14px; padding: 12px 0; }
+.spinner { width: 18px; height: 18px; border: 2.5px solid var(--surface2); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.sources-section { margin-top: 20px; padding-top: 20px; border-top: 1px dashed var(--border); }
+.sources-label { font-size: 12px; color: var(--text3); font-weight: 600; margin-bottom: 10px; letter-spacing: 0.05em; text-transform: uppercase; }
+.source-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; margin-bottom: 8px; font-size: 13px; cursor: pointer; transition: all 0.15s; }
+.source-card:hover { border-color: var(--accent); background: #fff; }
+.source-card-hdr { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.source-tag { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px; background: var(--accent); color: #fff; }
+.source-tag.tag-qa { background: var(--accent2); }
+.source-tag.tag-manual { background: var(--accent); }
+.source-tag.tag-rule { background: #7c3aed; }
+.source-tag.tag-route { background: #0891b2; }
+.source-score { margin-left: auto; font-size: 11px; color: var(--text3); font-family: 'IBM Plex Mono', monospace; }
+.source-title { font-weight: 500; color: var(--text); font-size: 13px; }
+.source-body { font-size: 12px; color: var(--text2); margin-top: 6px; display: none; white-space: pre-wrap; padding: 8px; background: var(--surface); border-radius: 6px; max-height: 200px; overflow-y: auto; }
+.source-card.open .source-body { display: block; }
+
+.error-msg { background: rgba(220, 38, 38, 0.08); border: 1px solid rgba(220, 38, 38, 0.3); color: var(--accent3); padding: 14px 18px; border-radius: 8px; font-size: 13px; }
+.info-msg { background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.3); color: #92400e; padding: 14px 18px; border-radius: 8px; font-size: 13px; line-height: 1.7; }
+
+@media (max-width: 640px) {
+  header { padding: 12px 16px; }
+  .main { padding: 20px 16px 60px; }
+  .ai-box { padding: 18px 20px; }
+  .search-box { flex-direction: column; }
+  .search-btn { padding: 14px; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-icon">✈</div>
+  <div>
+    <div class="logo-text">트리플러스 AI 검색</div>
+    <div class="logo-sub">현대자동차 출장관리</div>
+  </div>
+  <div class="hdr-right">
+    <span class="status-badge status-warn" id="statusBadge">로딩 중...</span>
+  </div>
+</header>
+
+<div class="main">
+  
+  <div class="welcome" id="welcome">
+    <h1>무엇을 도와드릴까요?</h1>
+    <p>출장 규정, 정산 방법 등 무엇이든 자연스럽게 질문하세요.</p>
+  </div>
+
+  <div class="search-box">
+    <div class="search-input-wrap">
+      <span class="si-icon">🔍</span>
+      <input type="text" class="search-input" id="searchInput" placeholder="예: 출장 끝나고 4주 동안 정산 못 했는데 어떻게 되나요?" autocomplete="off">
+    </div>
+    <button class="search-btn" id="searchBtn" onclick="doSearch()">AI 검색</button>
+  </div>
+
+  <div class="chips">
+    <span class="chips-label">자주 묻는 질문:</span>
+    <span class="chip" onclick="setQ('임원 일비는 얼마인가요?')">임원 일비</span>
+    <span class="chip" onclick="setQ('숙박비 한도가 어떻게 되나요?')">숙박비 한도</span>
+    <span class="chip" onclick="setQ('출장 4주 미정산 시 어떻게 되나요?')">4주 자동회수</span>
+    <span class="chip" onclick="setQ('하이패스 스크래핑 모듈 설치 오류 해결 방법?')">하이패스 오류</span>
+    <span class="chip" onclick="setQ('남양연구소에서 양재 본사까지 교통비?')">남양↔양재</span>
+  </div>
+
+  <div class="ai-box" id="aiBox">
+    <div class="ai-hdr">
+      <span class="ai-badge">AI 답변</span>
+      <span class="ai-sub" id="aiSub">현대자동차 트리플러스 자료 기반</span>
+    </div>
+    <div class="ai-content" id="aiContent"></div>
+    <div class="sources-section" id="sourcesSection" style="display:none;">
+      <div class="sources-label">📎 참고 자료</div>
+      <div id="sourcesList"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ====================================================
+// ⚠️ 본인 Firebase 프로젝트 설정으로 교체하세요
+// Firebase Console > 프로젝트 설정 > 일반 > "내 앱"에서 복사
+// ====================================================
+const firebaseConfig = {
+  apiKey: "YOUR_FIREBASE_API_KEY",
+  authDomain: "your-project.firebaseapp.com",
+  projectId: "your-project-id",
+  storageBucket: "your-project.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
+};
+
+// 시스템 프롬프트 (답변 형식)
+const SYSTEM_PROMPT = `당신은 현대자동차 트리플러스(TRIP+) 출장관리 Q&A 도우미입니다.
+제공된 자료만 근거로 답변하며, 자료에 없는 내용은 절대 추측하지 않습니다.
+
+답변 형식:
+[복잡한 질문 - 문제 해결형]
+1. **답변**: 결론을 1~4문장으로 먼저 제시
+2. **문제**: 사용자가 겪는 상황을 bullet로 정리
+3. **원인**: 왜 그런 일이 발생하는지 (규정/정책 근거 명시)
+4. **해결**: 구체적 조치를 단계별 표 또는 bullet로 정리
+5. **참고**: 답변 근거 자료 명시
+
+[단순 정보 조회 - 얼마/누가/언제]
+1. **답변**: 결론을 1~4문장으로 제시
+2. **관련 정보**: 표 형태로 핵심 데이터 정리
+3. **참고**: 출처 명시
+
+[선택지가 있는 경우]
+반드시 장단점 비교표 포함
+
+규칙:
+- 자료에 없는 내용은 "자료에 명시되어 있지 않음"으로 응답
+- 추측, 일반 상식 기반 답변 금지
+- 모든 답변 끝에 출처 명시
+- 감정 표현/사과 표현 금지
+- "일반적으로", "보통" 같은 모호한 표현 금지`;
+
+// 전역 변수
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+let CHUNKS = [];
+let EMBEDDINGS = {};
+let GEMINI_KEY = "";
+let HAS_EMBEDDINGS = false;
+
+// ====================================================
+// 초기화
+// ====================================================
+async function init() {
+  setStatus("연결 중...", "warn");
+  
+  try {
+    // 1. config에서 Gemini API 키 가져오기
+    const configDoc = await db.collection("config").doc("public").get();
+    if (!configDoc.exists) {
+      setStatus("설정 필요", "err");
+      showError("관리자가 아직 시스템을 초기화하지 않았습니다.<br>관리자 페이지에서 초기 설정을 완료해주세요.");
+      return;
+    }
+    GEMINI_KEY = configDoc.data().gemini_api_key;
+    if (!GEMINI_KEY) {
+      setStatus("API 키 없음", "err");
+      showError("Gemini API 키가 설정되지 않았습니다.<br>관리자 페이지에서 API 키를 등록해주세요.");
+      return;
+    }
+    
+    // 2. 자료 버전 확인 (캐시 사용 여부 결정)
+    const versionDoc = await db.collection("config").doc("version").get();
+    const serverVersion = versionDoc.exists ? versionDoc.data().updated_at?.toMillis() || 0 : 0;
+    const cachedVersion = parseInt(localStorage.getItem("triplus_chunks_version") || "0");
+    
+    if (serverVersion > 0 && cachedVersion === serverVersion) {
+      // 캐시 사용
+      const cached = localStorage.getItem("triplus_chunks_cache");
+      if (cached) {
+        const data = JSON.parse(cached);
+        CHUNKS = data.chunks;
+        EMBEDDINGS = data.embeddings;
+        HAS_EMBEDDINGS = Object.keys(EMBEDDINGS).length > 0;
+        console.log(`✓ 캐시 사용: ${CHUNKS.length}개 청크`);
+        setStatus(`✓ 준비 완료 (${CHUNKS.length}개)`, "ok");
+        return;
+      }
+    }
+    
+    // 3. Firestore에서 청크 로드
+    setStatus("자료 로드 중...", "warn");
+    const snap = await db.collection("chunks").get();
+    
+    CHUNKS = [];
+    EMBEDDINGS = {};
+    snap.forEach(doc => {
+      const d = doc.data();
+      CHUNKS.push({
+        id: doc.id,
+        source: d.source || "",
+        category: d.category || "",
+        title: d.title || "",
+        content: d.content || "",
+        search_text: d.search_text || ""
+      });
+      if (d.embedding && Array.isArray(d.embedding)) {
+        EMBEDDINGS[doc.id] = d.embedding;
+      }
+    });
+    
+    HAS_EMBEDDINGS = Object.keys(EMBEDDINGS).length > 0;
+    
+    // 4. 캐시 저장
+    try {
+      localStorage.setItem("triplus_chunks_cache", JSON.stringify({
+        chunks: CHUNKS,
+        embeddings: EMBEDDINGS
+      }));
+      localStorage.setItem("triplus_chunks_version", String(serverVersion));
+    } catch (e) {
+      console.warn("캐시 저장 실패 (용량 부족 가능):", e);
+    }
+    
+    setStatus(`✓ 준비 완료 (${CHUNKS.length}개)`, "ok");
+    console.log(`✅ ${CHUNKS.length}개 청크, ${Object.keys(EMBEDDINGS).length}개 임베딩 로드됨`);
+    
+  } catch (e) {
+    console.error(e);
+    setStatus("연결 실패", "err");
+    showError(`초기화 실패: ${e.message}<br>잠시 후 새로고침 해보세요.`);
+  }
+}
+
+function setStatus(text, type) {
+  const el = document.getElementById("statusBadge");
+  el.textContent = text;
+  el.className = "status-badge status-" + type;
+}
+
+// ====================================================
+// 검색
+// ====================================================
+function setQ(q) {
+  document.getElementById("searchInput").value = q;
+  doSearch();
+}
+
+async function doSearch() {
+  const query = document.getElementById("searchInput").value.trim();
+  if (!query) return;
+  
+  if (CHUNKS.length === 0) {
+    showError("자료가 로드되지 않았습니다. 페이지를 새로고침하세요.");
+    return;
+  }
+  if (!GEMINI_KEY) {
+    showError("API 키가 설정되지 않았습니다. 관리자에게 문의하세요.");
+    return;
+  }
+  
+  const btn = document.getElementById("searchBtn");
+  btn.disabled = true;
+  btn.textContent = "검색 중...";
+  
+  document.getElementById("welcome").style.display = "none";
+  const aiBox = document.getElementById("aiBox");
+  const aiContent = document.getElementById("aiContent");
+  const sourcesSection = document.getElementById("sourcesSection");
+  aiBox.classList.add("on");
+  sourcesSection.style.display = "none";
+  aiContent.innerHTML = `<div class="ai-loading"><div class="spinner"></div>관련 자료 검색 중...</div>`;
+  
+  const startTime = Date.now();
+  
+  try {
+    // 1. 관련 청크 검색
+    let topChunks;
+    if (HAS_EMBEDDINGS) {
+      document.getElementById("aiSub").textContent = "의미 검색 중...";
+      topChunks = await searchSemantic(query, 7);
+    } else {
+      document.getElementById("aiSub").textContent = "키워드 검색 중...";
+      topChunks = searchKeyword(query, 7);
+    }
+    
+    if (topChunks.length === 0) {
+      aiContent.innerHTML = `<div class="error-msg">관련 자료를 찾을 수 없습니다. 다른 키워드로 시도해보세요.</div>`;
+      return;
+    }
+    
+    // 2. AI 답변 생성
+    aiContent.innerHTML = `<div class="ai-loading"><div class="spinner"></div>답변 생성 중...</div>`;
+    document.getElementById("aiSub").textContent = "AI 답변 작성 중...";
+    
+    const answer = await generateAnswer(query, topChunks);
+    
+    // 3. 렌더링
+    aiContent.innerHTML = renderMarkdown(answer);
+    const elapsed = Date.now() - startTime;
+    document.getElementById("aiSub").textContent = 
+      `${HAS_EMBEDDINGS ? "의미 검색" : "키워드 검색"} · ${topChunks.length}개 자료 · ${elapsed}ms`;
+    
+    renderSources(topChunks);
+    sourcesSection.style.display = "block";
+    
+    // 4. 로그 기록 (비동기, 실패해도 무시)
+    try {
+      db.collection("search_logs").add({
+        query: query.slice(0, 200),
+        mode: HAS_EMBEDDINGS ? "semantic" : "keyword",
+        result_count: topChunks.length,
+        elapsed_ms: elapsed,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    } catch (e) { console.warn("로그 실패:", e); }
+    
+  } catch (e) {
+    console.error(e);
+    aiContent.innerHTML = `<div class="error-msg">❌ ${e.message}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "AI 검색";
+  }
+}
+
+// ====================================================
+// 의미 검색
+// ====================================================
+async function searchSemantic(query, topK) {
+  const queryEmb = await embedQuery(query);
+  const scored = [];
+  for (const chunk of CHUNKS) {
+    const emb = EMBEDDINGS[chunk.id];
+    if (!emb) continue;
+    scored.push({ chunk, score: cosineSim(queryEmb, emb) });
+  }
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, topK);
+}
+
+async function embedQuery(text) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${GEMINI_KEY}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "models/text-embedding-004",
+      content: { parts: [{ text }] },
+      taskType: "RETRIEVAL_QUERY"
+    })
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`임베딩 오류: ${err.slice(0, 100)}`);
+  }
+  const data = await res.json();
+  return data.embedding.values;
+}
+
+function cosineSim(a, b) {
+  let dot = 0, na = 0, nb = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    na += a[i] * a[i];
+    nb += b[i] * b[i];
+  }
+  return dot / (Math.sqrt(na) * Math.sqrt(nb) + 1e-10);
+}
+
+// ====================================================
+// 키워드 검색 (fallback)
+// ====================================================
+function searchKeyword(query, topK) {
+  const tokens = query.toLowerCase().split(/[\s,.\?!()[\]{}'":;~`!@#$%^&*+=<>\/\\|]+/).filter(t => t.length >= 2);
+  if (tokens.length === 0) return [];
+  
+  const scored = [];
+  for (const chunk of CHUNKS) {
+    const text = (chunk.search_text || "").toLowerCase();
+    let score = 0;
+    for (const token of tokens) {
+      const re = new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g");
+      const matches = text.match(re);
+      if (matches) {
+        score += matches.length * Math.min(token.length / 2, 3);
+        if ((chunk.title || "").toLowerCase().includes(token)) score += 5;
+      }
+    }
+    if (score > 0) scored.push({ chunk, score: score / 50 });
+  }
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, topK);
+}
+
+// ====================================================
+// Gemini 답변 생성
+// ====================================================
+async function generateAnswer(query, topChunks) {
+  const context = topChunks.map((x, i) => {
+    const c = x.chunk;
+    return `[자료 ${i+1}] 출처: ${c.source}${c.category ? " / " + c.category : ""}
+제목: ${c.title}
+내용: ${c.content}`;
+  }).join("\n\n---\n\n");
+  
+  const userMsg = `[참고 자료]\n${context}\n\n[사용자 질문]\n${query}\n\n위 자료만 근거로, 시스템 지시한 형식대로 답변하세요.`;
+  
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`;
+  
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+      contents: [{ role: "user", parts: [{ text: userMsg }] }],
+      generationConfig: { temperature: 0.2, maxOutputTokens: 2048 }
+    })
+  });
+  
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`AI 오류 (${res.status}): ${errText.slice(0, 150)}`);
+  }
+  const data = await res.json();
+  if (!data.candidates || !data.candidates[0]) throw new Error("응답이 비어있습니다");
+  return data.candidates[0].content.parts[0].text;
+}
+
+// ====================================================
+// Markdown 렌더링
+// ====================================================
+function renderMarkdown(md) {
+  let html = md;
+  // 표
+  html = html.replace(/(\|[^\n]+\|\n\|[\s\-:|]+\|\n(?:\|[^\n]+\|\n?)+)/g, (table) => {
+    const lines = table.trim().split("\n");
+    const header = lines[0].split("|").filter(c => c.trim()).map(c => `<th>${escapeHtml(c.trim())}</th>`).join("");
+    const rows = lines.slice(2).map(line => {
+      const cells = line.split("|").filter((c, i, a) => !(i === 0 && !c.trim()) && !(i === a.length - 1 && !c.trim()));
+      return "<tr>" + cells.map(c => `<td>${renderInline(c.trim())}</td>`).join("") + "</tr>";
+    }).join("");
+    return `<table><thead><tr>${header}</tr></thead><tbody>${rows}</tbody></table>`;
+  });
+  // 헤딩
+  html = html.replace(/^### (.+)$/gm, "<h3>$1</h3>");
+  html = html.replace(/^## (.+)$/gm, "<h3>$1</h3>");
+  // 리스트
+  html = html.replace(/(?:^- (.+)$\n?)+/gm, (m) => {
+    const items = m.trim().split(/\n/).map(line => line.replace(/^- /, "").trim());
+    return "<ul>" + items.map(i => `<li>${renderInline(i)}</li>`).join("") + "</ul>";
+  });
+  // 줄바꿈
+  html = html.split(/\n\n+/).map(p => {
+    if (p.match(/^<(h\d|ul|ol|table|pre)/)) return p;
+    return `<p>${renderInline(p)}</p>`;
+  }).join("");
+  return html;
+}
+
+function renderInline(text) {
+  text = escapeHtml(text);
+  text = text.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  text = text.replace(/`([^`]+)`/g, "<code>$1</code>");
+  text = text.replace(/\n/g, "<br>");
+  return text;
+}
+
+function escapeHtml(text) {
+  return String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+// ====================================================
+// 출처 렌더링
+// ====================================================
+function renderSources(topChunks) {
+  const list = document.getElementById("sourcesList");
+  list.innerHTML = topChunks.map((x, i) => {
+    const c = x.chunk;
+    const tagClass = getTagClass(c.source);
+    const tagLabel = (c.source || "").split("/")[0];
+    const score = `${(x.score * 100).toFixed(0)}%`;
+    return `<div class="source-card" onclick="toggleSource(${i})">
+      <div class="source-card-hdr">
+        <span class="source-tag ${tagClass}">${escapeHtml(tagLabel)}</span>
+        <span class="source-title">${escapeHtml((c.title || "").slice(0, 80))}</span>
+        <span class="source-score">${score}</span>
+      </div>
+      <div class="source-body">${escapeHtml(c.content || "")}</div>
+    </div>`;
+  }).join("");
+}
+
+function getTagClass(source) {
+  if (!source) return "";
+  if (source.startsWith("Q&A")) return "tag-qa";
+  if (source.startsWith("매뉴얼")) return "tag-manual";
+  if (source.includes("규정")) return "tag-rule";
+  if (source.includes("구간")) return "tag-route";
+  return "";
+}
+
+function toggleSource(i) {
+  document.querySelectorAll(".source-card")[i].classList.toggle("open");
+}
+
+function showError(msg) {
+  const aiBox = document.getElementById("aiBox");
+  const aiContent = document.getElementById("aiContent");
+  document.getElementById("sourcesSection").style.display = "none";
+  aiBox.classList.add("on");
+  aiContent.innerHTML = `<div class="info-msg">${msg}</div>`;
+}
+
+document.getElementById("searchInput").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") doSearch();
+});
+
+// 시작
+init();
+</script>
+
+</body>
+</html>

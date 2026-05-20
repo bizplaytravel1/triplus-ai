@@ -1,0 +1,1179 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>트리플러스 AI - 관리자</title>
+
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap');
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Noto Sans KR', sans-serif; background: #f0f4ff; color: #1a1f36; min-height: 100vh; font-size: 14px; }
+
+/* 로그인 화면 */
+#loginScreen { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
+.login-card { background: #fff; border: 1px solid #d0d9ee; border-radius: 20px; padding: 48px 40px; max-width: 460px; width: 100%; text-align: center; box-shadow: 0 8px 40px rgba(37, 99, 235, 0.1); }
+.login-logo { font-size: 48px; margin-bottom: 16px; }
+.login-title { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+.login-sub { font-size: 13px; color: #4b5680; margin-bottom: 24px; line-height: 1.8; }
+.login-warn { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 12px 16px; font-size: 12px; color: #92400e; margin-bottom: 20px; text-align: left; line-height: 1.7; }
+.google-btn { display: flex; align-items: center; gap: 12px; background: #fff; border: 1.5px solid #d0d9ee; border-radius: 12px; padding: 14px 24px; font-size: 15px; font-family: 'Noto Sans KR', sans-serif; cursor: pointer; transition: all 0.2s; width: 100%; justify-content: center; font-weight: 500; }
+.google-btn:hover { border-color: #2563eb; box-shadow: 0 4px 16px rgba(37, 99, 235, 0.15); }
+.login-err { color: #ef4444; font-size: 12px; margin-top: 14px; padding: 10px 14px; background: #fef2f2; border-radius: 8px; display: none; text-align: left; }
+
+/* 앱 화면 */
+#adminApp { display: none; }
+header { background: #1a1f36; padding: 0 24px; display: flex; align-items: center; gap: 16px; position: sticky; top: 0; z-index: 100; height: 58px; }
+.hdr-logo-icon { width: 32px; height: 32px; background: linear-gradient(135deg, #2563eb, #059669); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+.hdr-logo { font-size: 15px; font-weight: 700; color: #fff; }
+.hdr-sub { font-size: 11px; color: #94a3c0; }
+.hdr-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.user-chip { font-size: 11px; color: #94a3c0; background: rgba(255,255,255,0.1); border-radius: 20px; padding: 4px 12px; }
+.role-badge { font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 4px; }
+.role-master { background: #fbbf24; color: #78350f; }
+.role-manager { background: #60a5fa; color: #1e3a8a; }
+.role-viewer { background: #94a3c0; color: #1a1f36; }
+.logout-btn { background: none; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 5px 12px; font-size: 12px; cursor: pointer; color: #94a3c0; font-family: 'Noto Sans KR', sans-serif; }
+.logout-btn:hover { border-color: #ef4444; color: #ef4444; }
+
+.layout { display: flex; min-height: calc(100vh - 58px); }
+.sidebar { width: 220px; background: #fff; border-right: 1px solid #e2e8f0; flex-shrink: 0; position: sticky; top: 58px; height: calc(100vh - 58px); overflow-y: auto; }
+.sb-section { padding: 14px 0 4px; }
+.sb-label { font-size: 10px; font-weight: 700; color: #94a3c0; letter-spacing: 0.08em; padding: 0 16px 6px; }
+.sb-item { display: flex; align-items: center; gap: 6px; padding: 9px 16px; font-size: 13px; color: #4b5680; cursor: pointer; border-left: 3px solid transparent; transition: all 0.1s; }
+.sb-item:hover { background: #f8fafc; color: #1a1f36; }
+.sb-item.active { background: #eff6ff; color: #2563eb; border-left-color: #2563eb; font-weight: 600; }
+.sb-cnt { margin-left: auto; background: #f1f5f9; border-radius: 10px; padding: 1px 7px; font-size: 10px; font-family: monospace; color: #94a3c0; }
+.sb-item.active .sb-cnt { background: #dbeafe; color: #2563eb; }
+
+.content { flex: 1; padding: 24px 28px; min-width: 0; }
+.page-hdr { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; gap: 12px; flex-wrap: wrap; }
+.page-title { font-size: 19px; font-weight: 700; }
+.page-title small { font-size: 13px; font-weight: 400; color: #94a3c0; }
+.page-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.btn { border: none; border-radius: 9px; padding: 8px 16px; font-size: 13px; cursor: pointer; font-family: 'Noto Sans KR', sans-serif; font-weight: 600; transition: all 0.15s; white-space: nowrap; }
+.btn-primary { background: #2563eb; color: #fff; }
+.btn-primary:hover { background: #1d4ed8; }
+.btn-success { background: #059669; color: #fff; }
+.btn-success:hover { background: #047857; }
+.btn-danger { background: #ef4444; color: #fff; }
+.btn-danger:hover { background: #dc2626; }
+.btn-ghost { background: #f1f5f9; color: #4b5680; border: 1px solid #e2e8f0; }
+.btn-ghost:hover { background: #e2e8f0; }
+.btn-warn { background: #f59e0b; color: #fff; }
+.btn-sm { padding: 4px 10px; font-size: 11px; }
+
+.toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+.search-inp { background: #fff; border: 1.5px solid #e2e8f0; border-radius: 9px; padding: 8px 13px; font-size: 13px; outline: none; width: 280px; font-family: 'Noto Sans KR', sans-serif; }
+.search-inp:focus { border-color: #2563eb; }
+.fchips { display: flex; gap: 5px; flex-wrap: wrap; }
+.fchip { background: #f1f5f9; border: 1.5px solid #e2e8f0; border-radius: 20px; padding: 4px 12px; font-size: 12px; cursor: pointer; color: #4b5680; }
+.fchip.on { background: #eff6ff; border-color: #2563eb; color: #2563eb; font-weight: 600; }
+
+.tbl-wrap { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; overflow: hidden; }
+.dtbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+.dtbl th { background: #f8fafc; color: #4b5680; padding: 11px 12px; text-align: left; font-weight: 600; font-size: 11px; border-bottom: 1.5px solid #e2e8f0; white-space: nowrap; }
+.dtbl td { padding: 11px 12px; border-bottom: 1px solid #f1f5f9; vertical-align: top; line-height: 1.6; }
+.dtbl tr:hover td { background: #fafbff; }
+.dtbl tr.new-row td { animation: fadeNew 3s forwards; }
+@keyframes fadeNew { 0% { background: #bbf7d0; } 100% { background: transparent; } }
+.clip { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.clip-lg { max-width: 350px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #4b5680; }
+.tag { display: inline-block; font-size: 10px; padding: 2px 7px; border-radius: 10px; font-weight: 600; }
+.t-tp { background: #d1fae5; color: #065f46; }
+.t-oc { background: #ffedd5; color: #92400e; }
+.t-policy { background: #dbeafe; color: #1d4ed8; }
+.t-ny { background: #fef9c3; color: #854d0e; }
+.t-ov { background: #fae8ff; color: #7e22ce; }
+
+.empty-state { text-align: center; padding: 60px 20px; color: #94a3c0; }
+.empty-state .emoji { font-size: 48px; margin-bottom: 16px; }
+.empty-state h3 { font-size: 16px; color: #4b5680; margin-bottom: 8px; }
+.empty-state p { font-size: 13px; line-height: 1.7; }
+
+/* 모달 */
+.modal-bg { display: none; position: fixed; inset: 0; z-index: 3000; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; padding: 20px; }
+.modal-bg.open { display: flex; }
+.modal { background: #fff; border-radius: 18px; padding: 28px; width: 100%; max-width: 600px; max-height: 90vh; overflow-y: auto; box-shadow: 0 24px 64px rgba(0,0,0,0.25); }
+.modal-title { font-size: 17px; font-weight: 700; margin-bottom: 20px; }
+.field { margin-bottom: 14px; }
+.field label { display: block; font-size: 11px; font-weight: 700; color: #4b5680; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.04em; }
+.field label .req { color: #ef4444; }
+.field input, .field textarea, .field select { width: 100%; background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; font-size: 13px; font-family: 'Noto Sans KR', sans-serif; outline: none; }
+.field input:focus, .field textarea:focus, .field select:focus { border-color: #2563eb; background: #fff; }
+.field textarea { min-height: 90px; resize: vertical; line-height: 1.7; }
+.field textarea.tall { min-height: 160px; }
+.field .hint { font-size: 11px; color: #94a3c0; margin-top: 4px; }
+.modal-foot { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; padding-top: 14px; border-top: 1px solid #e2e8f0; }
+.modal-del { margin-right: auto; }
+
+.alert { padding: 12px 16px; border-radius: 9px; margin-bottom: 16px; font-size: 13px; line-height: 1.7; display: none; }
+.alert.on { display: block; }
+.alert-info { background: #eff6ff; border: 1px solid #bfdbfe; color: #1d4ed8; }
+.alert-warn { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; }
+.alert-err { background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; }
+.alert-ok { background: #f0fdf4; border: 1px solid #86efac; color: #166534; }
+
+.setup-card { background: #fff; border-radius: 14px; padding: 24px; margin-bottom: 16px; border: 1px solid #e2e8f0; }
+.setup-card h3 { font-size: 15px; font-weight: 700; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+.setup-card .desc { font-size: 13px; color: #4b5680; margin-bottom: 14px; line-height: 1.7; }
+.setup-status { padding: 8px 12px; border-radius: 8px; font-size: 12px; font-weight: 600; display: inline-block; margin-bottom: 8px; }
+.setup-status.done { background: #d1fae5; color: #065f46; }
+.setup-status.todo { background: #fef3c7; color: #92400e; }
+
+/* 진행률 바 */
+.progress-bar { width: 100%; height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden; margin: 8px 0; }
+.progress-fill { height: 100%; background: linear-gradient(90deg, #2563eb, #059669); transition: width 0.3s; }
+</style>
+</head>
+<body>
+
+<!-- 로그인 화면 -->
+<div id="loginScreen">
+  <div class="login-card">
+    <div class="login-logo">✈️</div>
+    <div class="login-title">트리플러스 AI 관리자</div>
+    <div class="login-sub">현대자동차 출장관리 지식베이스<br>허가된 구글 계정으로만 접근 가능합니다.</div>
+    <div class="login-warn">⚠️ 이 페이지는 반드시 <strong>GitHub Pages</strong>에서 열어야 합니다.<br>로컬 파일(file://)에서는 구글 로그인이 작동하지 않습니다.</div>
+    <button class="google-btn" id="loginBtn">
+      <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+      Google 계정으로 로그인
+    </button>
+    <div class="login-err" id="loginErr"></div>
+  </div>
+</div>
+
+<!-- 관리자 앱 -->
+<div id="adminApp">
+  <header>
+    <div class="hdr-logo-icon">✈</div>
+    <div>
+      <div class="hdr-logo">트리플러스 AI 관리자</div>
+      <div class="hdr-sub">현대자동차 출장관리</div>
+    </div>
+    <div class="hdr-right">
+      <span class="role-badge" id="roleBadge"></span>
+      <span class="user-chip" id="userChip"></span>
+      <button class="logout-btn" id="logoutBtn">로그아웃</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sb-section">
+        <div class="sb-label">📊 대시보드</div>
+        <div class="sb-item active" data-tab="dashboard">🏠 홈</div>
+      </div>
+      <div class="sb-section">
+        <div class="sb-label">📚 자료 관리</div>
+        <div class="sb-item" data-tab="qa">💬 Q&A <span class="sb-cnt" id="cntQa">-</span></div>
+        <div class="sb-item" data-tab="manual">📘 매뉴얼 <span class="sb-cnt" id="cntManual">-</span></div>
+        <div class="sb-item" data-tab="rules">📋 규정 <span class="sb-cnt" id="cntRules">-</span></div>
+        <div class="sb-item" data-tab="sync">🔄 임베딩 동기화</div>
+      </div>
+      <div class="sb-section">
+        <div class="sb-label">⚙ 시스템</div>
+        <div class="sb-item" data-tab="settings">🔑 API 키 설정</div>
+        <div class="sb-item" data-tab="accounts">👥 권한 관리 <span class="sb-cnt" id="cntAccounts">-</span></div>
+        <div class="sb-item" data-tab="logs">📋 검색 로그 <span class="sb-cnt" id="cntLogs">-</span></div>
+        <div class="sb-item" data-tab="admin-logs">📜 관리자 로그</div>
+      </div>
+      <div class="sb-section">
+        <div class="sb-label">💡 도움말</div>
+        <div class="sb-item" data-tab="help">📖 사용방법</div>
+      </div>
+    </aside>
+
+    <main class="content" id="mainContent">
+      <!-- 동적 렌더링 -->
+    </main>
+  </div>
+</div>
+
+<!-- 자료 편집 모달 -->
+<div class="modal-bg" id="itemModal">
+  <div class="modal">
+    <div class="modal-title" id="modalTitle">자료 추가</div>
+    <div id="modalFields"></div>
+    <div class="modal-foot">
+      <button class="btn btn-danger btn-sm modal-del" id="modalDel" style="display:none;">🗑 삭제</button>
+      <button class="btn btn-ghost" onclick="closeModal()">취소</button>
+      <button class="btn btn-primary" id="modalSave">💾 저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- 권한 추가 모달 -->
+<div class="modal-bg" id="accountModal">
+  <div class="modal">
+    <div class="modal-title">사용자 권한 추가</div>
+    <div class="field">
+      <label>이메일 <span class="req">*</span></label>
+      <input type="email" id="accEmail" placeholder="user@example.com">
+    </div>
+    <div class="field">
+      <label>이름</label>
+      <input type="text" id="accName" placeholder="홍길동">
+    </div>
+    <div class="field">
+      <label>권한 <span class="req">*</span></label>
+      <select id="accRole">
+        <option value="viewer">viewer (조회만)</option>
+        <option value="manager">manager (자료 편집)</option>
+        <option value="master">master (전체 관리)</option>
+      </select>
+      <div class="hint">• viewer: 관리자 페이지 로그인만 가능 (조회만)<br>• manager: 자료 추가/수정/삭제 가능<br>• master: 권한 관리, 시스템 설정까지 가능</div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-danger btn-sm modal-del" id="accDel" style="display:none;">🗑 삭제</button>
+      <button class="btn btn-ghost" onclick="closeAccountModal()">취소</button>
+      <button class="btn btn-primary" id="accSave">💾 저장</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// =========================================
+// ⚠️ 본인 Firebase 프로젝트 설정으로 교체
+// =========================================
+const firebaseConfig = {
+  apiKey: "YOUR_FIREBASE_API_KEY",
+  authDomain: "your-project.firebaseapp.com",
+  projectId: "your-project-id",
+  storageBucket: "your-project.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+// 전역 상태
+let CURRENT_USER = null;
+let CURRENT_ROLE = null;
+let CURRENT_TAB = "dashboard";
+let DATA_QA = [];
+let DATA_MANUAL = [];
+let DATA_RULES = [];
+let DATA_ACCOUNTS = [];
+let DATA_LOGS = [];
+let DATA_ADMIN_LOGS = [];
+let EDITING_ITEM = null;
+let EDITING_COLLECTION = null;
+let EDITING_ACCOUNT = null;
+
+// =========================================
+// 로그인
+// =========================================
+auth.onAuthStateChanged(async (user) => {
+  if (!user) {
+    showLogin();
+    return;
+  }
+  
+  // 권한 확인
+  const accDoc = await db.collection("accounts").doc(user.email).get();
+  if (!accDoc.exists) {
+    // 첫 번째 사용자라면 자동으로 master로 등록 (초기 셋업)
+    const allAccounts = await db.collection("accounts").limit(1).get();
+    if (allAccounts.empty) {
+      // 첫 사용자 → master로 자동 등록
+      await db.collection("accounts").doc(user.email).set({
+        email: user.email,
+        name: user.displayName || user.email,
+        role: "master",
+        created_at: firebase.firestore.FieldValue.serverTimestamp(),
+        created_by: "system_init"
+      });
+      CURRENT_USER = user;
+      CURRENT_ROLE = "master";
+      logAdminAction("system_init", { detail: "초기 master 등록" });
+      showApp();
+      return;
+    }
+    
+    await auth.signOut();
+    showLoginError(`이 계정(${user.email})은 등록되지 않았습니다. 관리자에게 권한 등록을 요청하세요.`);
+    return;
+  }
+  
+  CURRENT_USER = user;
+  CURRENT_ROLE = accDoc.data().role;
+  showApp();
+});
+
+function showLogin() {
+  document.getElementById("loginScreen").style.display = "flex";
+  document.getElementById("adminApp").style.display = "none";
+}
+
+function showLoginError(msg) {
+  showLogin();
+  const errEl = document.getElementById("loginErr");
+  errEl.textContent = msg;
+  errEl.style.display = "block";
+}
+
+function showApp() {
+  document.getElementById("loginScreen").style.display = "none";
+  document.getElementById("adminApp").style.display = "block";
+  
+  // 사용자 표시
+  document.getElementById("userChip").textContent = CURRENT_USER.email;
+  const badge = document.getElementById("roleBadge");
+  badge.textContent = CURRENT_ROLE;
+  badge.className = "role-badge role-" + CURRENT_ROLE;
+  
+  // 초기 데이터 로드
+  loadAllData();
+  switchTab("dashboard");
+}
+
+document.getElementById("loginBtn").addEventListener("click", async () => {
+  const provider = new firebase.auth.GoogleAuthProvider();
+  try {
+    await auth.signInWithPopup(provider);
+  } catch (e) {
+    console.error(e);
+    showLoginError("로그인 실패: " + e.message);
+  }
+});
+
+document.getElementById("logoutBtn").addEventListener("click", async () => {
+  await auth.signOut();
+  location.reload();
+});
+
+// =========================================
+// 권한 체크
+// =========================================
+function canEdit() { return CURRENT_ROLE === "master" || CURRENT_ROLE === "manager"; }
+function isMaster() { return CURRENT_ROLE === "master"; }
+
+// =========================================
+// 관리자 로그
+// =========================================
+async function logAdminAction(action, detail) {
+  try {
+    await db.collection("admin_action_logs").add({
+      user_email: CURRENT_USER?.email || "system",
+      user_name: CURRENT_USER?.displayName || "",
+      action: action,
+      detail: detail || {},
+      timestamp: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  } catch (e) { console.warn("로그 실패:", e); }
+}
+
+// =========================================
+// 데이터 로드
+// =========================================
+async function loadAllData() {
+  try {
+    const [qaSnap, manSnap, ruleSnap, accSnap] = await Promise.all([
+      db.collection("chunks").where("source_type", "==", "qa").get(),
+      db.collection("chunks").where("source_type", "==", "manual").get(),
+      db.collection("chunks").where("source_type", "==", "rule").get(),
+      db.collection("accounts").get()
+    ]);
+    
+    DATA_QA = qaSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    DATA_MANUAL = manSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    DATA_RULES = ruleSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    DATA_ACCOUNTS = accSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    
+    document.getElementById("cntQa").textContent = DATA_QA.length;
+    document.getElementById("cntManual").textContent = DATA_MANUAL.length;
+    document.getElementById("cntRules").textContent = DATA_RULES.length;
+    document.getElementById("cntAccounts").textContent = DATA_ACCOUNTS.length;
+    
+    if (isMaster()) {
+      const [logSnap, alSnap] = await Promise.all([
+        db.collection("search_logs").orderBy("timestamp", "desc").limit(100).get(),
+        db.collection("admin_action_logs").orderBy("timestamp", "desc").limit(100).get()
+      ]);
+      DATA_LOGS = logSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      DATA_ADMIN_LOGS = alSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      document.getElementById("cntLogs").textContent = DATA_LOGS.length;
+    }
+  } catch (e) {
+    console.error("데이터 로드 실패:", e);
+    alert("데이터 로드 실패: " + e.message);
+  }
+}
+
+// =========================================
+// 탭 전환
+// =========================================
+document.querySelectorAll(".sb-item").forEach(item => {
+  item.addEventListener("click", () => switchTab(item.dataset.tab));
+});
+
+function switchTab(tab) {
+  CURRENT_TAB = tab;
+  document.querySelectorAll(".sb-item").forEach(i => {
+    i.classList.toggle("active", i.dataset.tab === tab);
+  });
+  renderTab(tab);
+}
+
+function renderTab(tab) {
+  const c = document.getElementById("mainContent");
+  
+  switch (tab) {
+    case "dashboard": c.innerHTML = renderDashboard(); break;
+    case "qa": c.innerHTML = renderItemList("Q&A", DATA_QA, "qa"); break;
+    case "manual": c.innerHTML = renderItemList("매뉴얼", DATA_MANUAL, "manual"); break;
+    case "rules": c.innerHTML = renderItemList("규정", DATA_RULES, "rule"); break;
+    case "sync": c.innerHTML = renderSync(); break;
+    case "settings": c.innerHTML = renderSettings(); break;
+    case "accounts": c.innerHTML = renderAccounts(); break;
+    case "logs": c.innerHTML = renderLogs(); break;
+    case "admin-logs": c.innerHTML = renderAdminLogs(); break;
+    case "help": c.innerHTML = renderHelp(); break;
+  }
+}
+
+// =========================================
+// 대시보드
+// =========================================
+function renderDashboard() {
+  const totalChunks = DATA_QA.length + DATA_MANUAL.length + DATA_RULES.length;
+  const embeddedCount = [...DATA_QA, ...DATA_MANUAL, ...DATA_RULES].filter(c => c.embedding).length;
+  const embedRatio = totalChunks > 0 ? Math.round(embeddedCount / totalChunks * 100) : 0;
+  
+  return `
+    <div class="page-hdr"><div class="page-title">🏠 대시보드</div></div>
+    
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-bottom:24px;">
+      <div class="setup-card">
+        <div style="font-size:32px;font-weight:700;color:#2563eb;">${totalChunks}</div>
+        <div style="font-size:13px;color:#4b5680;">전체 자료</div>
+      </div>
+      <div class="setup-card">
+        <div style="font-size:32px;font-weight:700;color:#059669;">${embeddedCount}</div>
+        <div style="font-size:13px;color:#4b5680;">임베딩 완료 (${embedRatio}%)</div>
+      </div>
+      <div class="setup-card">
+        <div style="font-size:32px;font-weight:700;color:#7c3aed;">${DATA_ACCOUNTS.length}</div>
+        <div style="font-size:13px;color:#4b5680;">등록된 사용자</div>
+      </div>
+      <div class="setup-card">
+        <div style="font-size:32px;font-weight:700;color:#f59e0b;">${DATA_LOGS.length}</div>
+        <div style="font-size:13px;color:#4b5680;">최근 검색 (100건)</div>
+      </div>
+    </div>
+    
+    ${embedRatio < 100 ? `
+      <div class="alert alert-warn on">
+        ⚠️ 일부 자료가 아직 임베딩되지 않았습니다. <strong>"임베딩 동기화"</strong> 메뉴에서 동기화를 실행하세요.
+      </div>
+    ` : `
+      <div class="alert alert-ok on">
+        ✅ 모든 자료가 임베딩 완료 상태입니다. 검색이 정상 동작합니다.
+      </div>
+    `}
+    
+    <div class="setup-card">
+      <h3>📊 빠른 시작</h3>
+      <div class="desc">
+        • <strong>자료 추가</strong>: Q&A, 매뉴얼, 규정 메뉴에서 "+ 새 항목 추가" 클릭<br>
+        • <strong>API 키 설정</strong>: 검색이 동작하려면 Gemini API 키 등록 필요<br>
+        • <strong>권한 관리</strong>: 다른 사용자도 관리자 페이지를 쓰려면 권한 추가<br>
+        • <strong>임베딩 동기화</strong>: 자료 추가/수정 후 검색에 반영하려면 동기화 실행
+      </div>
+    </div>
+  `;
+}
+
+// =========================================
+// 자료 리스트 (Q&A, 매뉴얼, 규정 공통)
+// =========================================
+function renderItemList(title, items, type) {
+  const typeIcon = type === "qa" ? "💬" : type === "manual" ? "📘" : "📋";
+  
+  return `
+    <div class="page-hdr">
+      <div class="page-title">${typeIcon} ${title} <small>(${items.length}건)</small></div>
+      <div class="page-actions">
+        ${canEdit() ? `<button class="btn btn-primary" onclick="openAddModal('${type}')">+ 새 항목 추가</button>` : ''}
+      </div>
+    </div>
+    
+    <div class="toolbar">
+      <input type="text" class="search-inp" id="filterInput" placeholder="검색..." oninput="filterItems('${type}')">
+    </div>
+    
+    <div class="tbl-wrap">
+      <table class="dtbl" id="itemTbl">
+        <thead>
+          <tr>
+            <th style="width:80px;">출처</th>
+            <th style="width:100px;">카테고리</th>
+            <th>제목/질문</th>
+            <th>내용/답변</th>
+            <th style="width:50px;">임베딩</th>
+            ${canEdit() ? `<th style="width:80px;">관리</th>` : ''}
+          </tr>
+        </thead>
+        <tbody id="itemTbody">
+          ${items.length === 0 ? `<tr><td colspan="6" style="padding:40px;text-align:center;color:#94a3c0;">아직 등록된 자료가 없습니다. ${canEdit() ? '"+ 새 항목 추가" 버튼을 눌러 시작하세요.' : ''}</td></tr>` : 
+            items.map(item => renderItemRow(item, type)).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderItemRow(item, type) {
+  return `
+    <tr>
+      <td><span class="tag t-policy">${escapeHtml(item.source || "")}</span></td>
+      <td>${escapeHtml(item.category || "-")}</td>
+      <td class="clip" title="${escapeHtml(item.title || "")}">${escapeHtml(item.title || "")}</td>
+      <td class="clip-lg" title="${escapeHtml(item.content || "")}">${escapeHtml((item.content || "").slice(0, 100))}</td>
+      <td>${item.embedding ? '✅' : '⏸'}</td>
+      ${canEdit() ? `<td><button class="btn btn-ghost btn-sm" onclick="openEditModal('${type}', '${item.id}')">편집</button></td>` : ''}
+    </tr>
+  `;
+}
+
+function filterItems(type) {
+  const q = document.getElementById("filterInput").value.toLowerCase();
+  const items = type === "qa" ? DATA_QA : type === "manual" ? DATA_MANUAL : DATA_RULES;
+  const filtered = q ? items.filter(i => 
+    (i.title || "").toLowerCase().includes(q) || 
+    (i.content || "").toLowerCase().includes(q) || 
+    (i.source || "").toLowerCase().includes(q) ||
+    (i.category || "").toLowerCase().includes(q)
+  ) : items;
+  document.getElementById("itemTbody").innerHTML = filtered.length === 0 
+    ? `<tr><td colspan="6" style="padding:40px;text-align:center;color:#94a3c0;">검색 결과 없음</td></tr>`
+    : filtered.map(item => renderItemRow(item, type)).join("");
+}
+
+// =========================================
+// 자료 추가/편집 모달
+// =========================================
+function openAddModal(type) {
+  EDITING_ITEM = null;
+  EDITING_COLLECTION = type;
+  document.getElementById("modalTitle").textContent = "+ 새 항목 추가";
+  document.getElementById("modalDel").style.display = "none";
+  renderModalFields(type, null);
+  document.getElementById("itemModal").classList.add("open");
+}
+
+function openEditModal(type, itemId) {
+  const items = type === "qa" ? DATA_QA : type === "manual" ? DATA_MANUAL : DATA_RULES;
+  const item = items.find(i => i.id === itemId);
+  if (!item) return;
+  
+  EDITING_ITEM = item;
+  EDITING_COLLECTION = type;
+  document.getElementById("modalTitle").textContent = "✏️ 자료 편집";
+  document.getElementById("modalDel").style.display = "inline-block";
+  renderModalFields(type, item);
+  document.getElementById("itemModal").classList.add("open");
+}
+
+function renderModalFields(type, item) {
+  const html = `
+    <div class="field">
+      <label>출처 <span class="req">*</span></label>
+      <input type="text" id="fld_source" value="${escapeHtml(item?.source || (type === "qa" ? "Q&A/트리플러스" : type === "manual" ? "매뉴얼/출장정책" : "규정"))}" placeholder="예: Q&A/트리플러스">
+      <div class="hint">자료의 출처. 예: "Q&A/트리플러스", "매뉴얼/출장정책", "숙박비규정"</div>
+    </div>
+    <div class="field">
+      <label>카테고리</label>
+      <input type="text" id="fld_category" value="${escapeHtml(item?.category || "")}" placeholder="예: 출장정책, 정산">
+    </div>
+    <div class="field">
+      <label>제목/질문 <span class="req">*</span></label>
+      <textarea id="fld_title" placeholder="예: 임원 일비는 얼마인가요?">${escapeHtml(item?.title || "")}</textarea>
+    </div>
+    <div class="field">
+      <label>내용/답변 <span class="req">*</span></label>
+      <textarea id="fld_content" class="tall" placeholder="예: 임원 일비는 1일 6만원입니다...">${escapeHtml(item?.content || "")}</textarea>
+    </div>
+    <div class="alert alert-info on" style="margin:0;">
+      💡 저장 시 자동으로 임베딩이 생성되어 검색에 즉시 반영됩니다.
+    </div>
+  `;
+  document.getElementById("modalFields").innerHTML = html;
+}
+
+function closeModal() {
+  document.getElementById("itemModal").classList.remove("open");
+  EDITING_ITEM = null;
+}
+
+document.getElementById("modalSave").addEventListener("click", async () => {
+  const source = document.getElementById("fld_source").value.trim();
+  const category = document.getElementById("fld_category").value.trim();
+  const title = document.getElementById("fld_title").value.trim();
+  const content = document.getElementById("fld_content").value.trim();
+  
+  if (!source || !title || !content) {
+    alert("출처, 제목, 내용은 필수입니다.");
+    return;
+  }
+  
+  const btn = document.getElementById("modalSave");
+  btn.disabled = true;
+  btn.textContent = "저장 중...";
+  
+  try {
+    // 1. Gemini API 키 가져오기 (임베딩용)
+    const configDoc = await db.collection("config").doc("public").get();
+    const geminiKey = configDoc.exists ? configDoc.data().gemini_api_key : null;
+    
+    let embedding = null;
+    if (geminiKey) {
+      btn.textContent = "임베딩 생성 중...";
+      try {
+        embedding = await generateEmbedding(`${title}\n${content}`, geminiKey);
+      } catch (e) {
+        console.warn("임베딩 실패 (저장은 진행):", e);
+      }
+    }
+    
+    const data = {
+      source: source,
+      category: category,
+      title: title,
+      content: content,
+      search_text: `${title}\n${content}`,
+      source_type: EDITING_COLLECTION,
+      updated_at: firebase.firestore.FieldValue.serverTimestamp(),
+      updated_by: CURRENT_USER.email
+    };
+    if (embedding) data.embedding = embedding;
+    
+    if (EDITING_ITEM) {
+      await db.collection("chunks").doc(EDITING_ITEM.id).update(data);
+      logAdminAction("update_item", { id: EDITING_ITEM.id, title: title.slice(0, 50) });
+    } else {
+      data.created_at = firebase.firestore.FieldValue.serverTimestamp();
+      data.created_by = CURRENT_USER.email;
+      await db.collection("chunks").add(data);
+      logAdminAction("create_item", { title: title.slice(0, 50) });
+    }
+    
+    // 자료 버전 업데이트 (검색 페이지 캐시 갱신용)
+    await db.collection("config").doc("version").set({
+      updated_at: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    
+    closeModal();
+    await loadAllData();
+    renderTab(CURRENT_TAB);
+  } catch (e) {
+    alert("저장 실패: " + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "💾 저장";
+  }
+});
+
+document.getElementById("modalDel").addEventListener("click", async () => {
+  if (!EDITING_ITEM) return;
+  if (!confirm(`"${EDITING_ITEM.title?.slice(0, 50)}" 자료를 정말 삭제하시겠습니까?`)) return;
+  
+  try {
+    await db.collection("chunks").doc(EDITING_ITEM.id).delete();
+    await db.collection("config").doc("version").set({
+      updated_at: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    logAdminAction("delete_item", { id: EDITING_ITEM.id, title: EDITING_ITEM.title?.slice(0, 50) });
+    closeModal();
+    await loadAllData();
+    renderTab(CURRENT_TAB);
+  } catch (e) {
+    alert("삭제 실패: " + e.message);
+  }
+});
+
+// =========================================
+// 임베딩 생성 함수
+// =========================================
+async function generateEmbedding(text, apiKey) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${apiKey}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "models/text-embedding-004",
+      content: { parts: [{ text: text.slice(0, 2000) }] },
+      taskType: "RETRIEVAL_DOCUMENT"
+    })
+  });
+  if (!res.ok) throw new Error(await res.text());
+  const data = await res.json();
+  return data.embedding.values;
+}
+
+// =========================================
+// 임베딩 동기화 페이지
+// =========================================
+function renderSync() {
+  const all = [...DATA_QA, ...DATA_MANUAL, ...DATA_RULES];
+  const missing = all.filter(c => !c.embedding);
+  
+  return `
+    <div class="page-hdr"><div class="page-title">🔄 임베딩 동기화</div></div>
+    
+    <div class="alert alert-info on">
+      💡 <strong>임베딩이란?</strong> 자료를 검색 가능한 "의미 벡터"로 변환하는 과정입니다.<br>
+      자료 추가/수정 시 자동으로 생성되지만, 누락된 항목은 여기서 수동으로 생성할 수 있습니다.
+    </div>
+    
+    <div class="setup-card">
+      <h3>📊 현재 상태</h3>
+      <div class="desc">
+        • 전체 자료: <strong>${all.length}개</strong><br>
+        • 임베딩 완료: <strong>${all.length - missing.length}개</strong> (${all.length > 0 ? Math.round((all.length - missing.length) / all.length * 100) : 0}%)<br>
+        • 미완료: <strong style="color:#ef4444;">${missing.length}개</strong>
+      </div>
+      
+      ${missing.length > 0 && canEdit() ? `
+        <button class="btn btn-primary" id="syncBtn" onclick="runSync()">🚀 누락된 ${missing.length}개 임베딩 생성하기</button>
+        <div id="syncProgress" style="display:none;margin-top:14px;">
+          <div class="progress-bar"><div class="progress-fill" id="syncFill" style="width:0%"></div></div>
+          <div id="syncText" style="font-size:12px;color:#4b5680;"></div>
+        </div>
+      ` : missing.length === 0 ? `
+        <div class="alert alert-ok on" style="margin-top:14px;">✅ 모든 자료가 임베딩 완료 상태입니다.</div>
+      ` : ''}
+    </div>
+    
+    <div class="setup-card">
+      <h3>📥 초기 데이터 일괄 업로드</h3>
+      <div class="desc">
+        시스템 첫 설치 시 또는 대량의 자료를 한 번에 등록할 때 사용합니다.<br>
+        <strong>chunks.json</strong> 파일을 업로드하면 모든 자료가 Firestore에 등록되고 임베딩이 자동 생성됩니다.
+      </div>
+      ${canEdit() ? `
+        <input type="file" id="bulkUpload" accept=".json" style="margin-bottom:10px;">
+        <button class="btn btn-warn" onclick="runBulkUpload()">📤 일괄 업로드 시작</button>
+        <div id="bulkProgress" style="display:none;margin-top:14px;">
+          <div class="progress-bar"><div class="progress-fill" id="bulkFill" style="width:0%"></div></div>
+          <div id="bulkText" style="font-size:12px;color:#4b5680;"></div>
+        </div>
+      ` : '<div class="alert alert-warn on">권한이 필요합니다 (manager 이상).</div>'}
+    </div>
+  `;
+}
+
+async function runSync() {
+  const configDoc = await db.collection("config").doc("public").get();
+  const apiKey = configDoc.exists ? configDoc.data().gemini_api_key : null;
+  if (!apiKey) {
+    alert("먼저 'API 키 설정' 메뉴에서 Gemini API 키를 등록하세요.");
+    return;
+  }
+  
+  const all = [...DATA_QA, ...DATA_MANUAL, ...DATA_RULES];
+  const missing = all.filter(c => !c.embedding);
+  if (missing.length === 0) return;
+  
+  document.getElementById("syncBtn").disabled = true;
+  document.getElementById("syncProgress").style.display = "block";
+  const fill = document.getElementById("syncFill");
+  const text = document.getElementById("syncText");
+  
+  let done = 0;
+  for (const item of missing) {
+    try {
+      const emb = await generateEmbedding(`${item.title}\n${item.content}`, apiKey);
+      await db.collection("chunks").doc(item.id).update({
+        embedding: emb,
+        updated_at: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      done++;
+      const pct = Math.round(done / missing.length * 100);
+      fill.style.width = pct + "%";
+      text.textContent = `${done} / ${missing.length} 완료 (${pct}%)`;
+      await new Promise(r => setTimeout(r, 100));  // rate limit
+    } catch (e) {
+      console.error("임베딩 실패:", item.id, e);
+      text.textContent += ` (오류: ${item.id})`;
+    }
+  }
+  
+  await db.collection("config").doc("version").set({
+    updated_at: firebase.firestore.FieldValue.serverTimestamp()
+  });
+  logAdminAction("sync_embeddings", { count: done });
+  text.textContent += " - 완료!";
+  setTimeout(async () => {
+    await loadAllData();
+    renderTab("sync");
+  }, 1500);
+}
+
+async function runBulkUpload() {
+  const fileInput = document.getElementById("bulkUpload");
+  if (!fileInput.files[0]) {
+    alert("chunks.json 파일을 선택하세요.");
+    return;
+  }
+  
+  const configDoc = await db.collection("config").doc("public").get();
+  const apiKey = configDoc.exists ? configDoc.data().gemini_api_key : null;
+  if (!apiKey) {
+    if (!confirm("Gemini API 키가 없습니다. 임베딩 없이 자료만 업로드 하시겠습니까? (나중에 동기화 가능)")) return;
+  }
+  
+  const text = await fileInput.files[0].text();
+  const chunks = JSON.parse(text);
+  
+  document.getElementById("bulkProgress").style.display = "block";
+  const fill = document.getElementById("bulkFill");
+  const txt = document.getElementById("bulkText");
+  
+  let done = 0;
+  for (const chunk of chunks) {
+    try {
+      const sourceType = chunk.source.startsWith("Q&A") ? "qa" : 
+                        chunk.source.startsWith("매뉴얼") ? "manual" : "rule";
+      const data = {
+        source: chunk.source,
+        category: chunk.category,
+        title: chunk.title,
+        content: chunk.content,
+        search_text: chunk.search_text,
+        source_type: sourceType,
+        created_at: firebase.firestore.FieldValue.serverTimestamp(),
+        created_by: CURRENT_USER.email
+      };
+      
+      if (apiKey) {
+        try {
+          data.embedding = await generateEmbedding(chunk.search_text, apiKey);
+        } catch (e) { console.warn("임베딩 실패:", e); }
+      }
+      
+      await db.collection("chunks").doc(chunk.id).set(data);
+      done++;
+      const pct = Math.round(done / chunks.length * 100);
+      fill.style.width = pct + "%";
+      txt.textContent = `${done} / ${chunks.length} 완료 (${pct}%)`;
+      await new Promise(r => setTimeout(r, 50));
+    } catch (e) {
+      console.error("업로드 실패:", chunk.id, e);
+    }
+  }
+  
+  await db.collection("config").doc("version").set({
+    updated_at: firebase.firestore.FieldValue.serverTimestamp()
+  });
+  logAdminAction("bulk_upload", { count: done });
+  txt.textContent += " - 완료!";
+  setTimeout(async () => {
+    await loadAllData();
+    renderTab("sync");
+  }, 2000);
+}
+
+// =========================================
+// 설정 (API 키)
+// =========================================
+function renderSettings() {
+  if (!isMaster()) return `<div class="alert alert-err on">권한이 부족합니다. master 권한이 필요합니다.</div>`;
+  
+  return `
+    <div class="page-hdr"><div class="page-title">🔑 API 키 설정</div></div>
+    
+    <div class="alert alert-warn on">
+      ⚠️ 이 페이지에서 등록한 Gemini API 키는 검색 페이지에서 자동으로 사용됩니다.<br>
+      <strong>반드시 Google Cloud Console에서 HTTP Referer 제한을 설정하세요</strong> (사용 방법 메뉴 참고).
+    </div>
+    
+    <div class="setup-card">
+      <h3>🔐 Gemini API 키</h3>
+      <div class="desc">
+        검색 페이지의 AI 답변 생성에 사용됩니다.<br>
+        발급 방법: <a href="https://aistudio.google.com/apikey" target="_blank" style="color:#2563eb;">aistudio.google.com/apikey</a>
+      </div>
+      <div class="field">
+        <label>API 키</label>
+        <input type="password" id="apiKeyInput" placeholder="AIza...">
+      </div>
+      <button class="btn btn-primary" onclick="saveApiKey()">💾 저장</button>
+      <div id="apiKeyMsg" style="margin-top:10px;font-size:12px;"></div>
+    </div>
+  `;
+}
+
+async function saveApiKey() {
+  const key = document.getElementById("apiKeyInput").value.trim();
+  if (!key) {
+    alert("API 키를 입력하세요.");
+    return;
+  }
+  try {
+    await db.collection("config").doc("public").set({
+      gemini_api_key: key,
+      updated_at: firebase.firestore.FieldValue.serverTimestamp(),
+      updated_by: CURRENT_USER.email
+    });
+    logAdminAction("update_api_key", {});
+    document.getElementById("apiKeyMsg").innerHTML = '<span style="color:#059669;">✓ 저장되었습니다.</span>';
+    document.getElementById("apiKeyInput").value = "";
+  } catch (e) {
+    alert("저장 실패: " + e.message);
+  }
+}
+
+// =========================================
+// 권한 관리
+// =========================================
+function renderAccounts() {
+  if (!isMaster()) return `<div class="alert alert-err on">master 권한이 필요합니다.</div>`;
+  
+  return `
+    <div class="page-hdr">
+      <div class="page-title">👥 권한 관리 <small>(${DATA_ACCOUNTS.length}명)</small></div>
+      <div class="page-actions">
+        <button class="btn btn-primary" onclick="openAccountModal()">+ 사용자 추가</button>
+      </div>
+    </div>
+    
+    <div class="alert alert-info on">
+      💡 여기에 등록된 Google 계정만 관리자 페이지에 로그인할 수 있습니다.<br>
+      • <strong>master</strong>: 모든 권한 (권한 관리, API 키 설정)<br>
+      • <strong>manager</strong>: 자료 추가/수정/삭제<br>
+      • <strong>viewer</strong>: 조회만 가능
+    </div>
+    
+    <div class="tbl-wrap">
+      <table class="dtbl">
+        <thead>
+          <tr><th>이메일</th><th>이름</th><th>권한</th><th>등록일</th><th>관리</th></tr>
+        </thead>
+        <tbody>
+          ${DATA_ACCOUNTS.map(a => `
+            <tr>
+              <td>${escapeHtml(a.email)}</td>
+              <td>${escapeHtml(a.name || "-")}</td>
+              <td><span class="role-badge role-${a.role}">${a.role}</span></td>
+              <td>${a.created_at ? new Date(a.created_at.toMillis()).toLocaleDateString() : "-"}</td>
+              <td><button class="btn btn-ghost btn-sm" onclick="openEditAccount('${a.id}')">편집</button></td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function openAccountModal() {
+  EDITING_ACCOUNT = null;
+  document.getElementById("accEmail").value = "";
+  document.getElementById("accEmail").disabled = false;
+  document.getElementById("accName").value = "";
+  document.getElementById("accRole").value = "viewer";
+  document.getElementById("accDel").style.display = "none";
+  document.getElementById("accountModal").classList.add("open");
+}
+
+function openEditAccount(id) {
+  const acc = DATA_ACCOUNTS.find(a => a.id === id);
+  if (!acc) return;
+  EDITING_ACCOUNT = acc;
+  document.getElementById("accEmail").value = acc.email;
+  document.getElementById("accEmail").disabled = true;
+  document.getElementById("accName").value = acc.name || "";
+  document.getElementById("accRole").value = acc.role;
+  document.getElementById("accDel").style.display = (acc.email === CURRENT_USER.email) ? "none" : "inline-block";
+  document.getElementById("accountModal").classList.add("open");
+}
+
+function closeAccountModal() {
+  document.getElementById("accountModal").classList.remove("open");
+}
+
+document.getElementById("accSave").addEventListener("click", async () => {
+  const email = document.getElementById("accEmail").value.trim().toLowerCase();
+  const name = document.getElementById("accName").value.trim();
+  const role = document.getElementById("accRole").value;
+  if (!email || !email.includes("@")) { alert("올바른 이메일을 입력하세요."); return; }
+  
+  try {
+    await db.collection("accounts").doc(email).set({
+      email: email,
+      name: name,
+      role: role,
+      updated_at: firebase.firestore.FieldValue.serverTimestamp(),
+      updated_by: CURRENT_USER.email
+    }, { merge: true });
+    
+    if (!EDITING_ACCOUNT) {
+      await db.collection("accounts").doc(email).update({
+        created_at: firebase.firestore.FieldValue.serverTimestamp(),
+        created_by: CURRENT_USER.email
+      });
+    }
+    logAdminAction(EDITING_ACCOUNT ? "update_account" : "create_account", { email, role });
+    closeAccountModal();
+    await loadAllData();
+    renderTab("accounts");
+  } catch (e) {
+    alert("저장 실패: " + e.message);
+  }
+});
+
+document.getElementById("accDel").addEventListener("click", async () => {
+  if (!EDITING_ACCOUNT) return;
+  if (!confirm(`${EDITING_ACCOUNT.email}의 권한을 삭제하시겠습니까?`)) return;
+  try {
+    await db.collection("accounts").doc(EDITING_ACCOUNT.id).delete();
+    logAdminAction("delete_account", { email: EDITING_ACCOUNT.email });
+    closeAccountModal();
+    await loadAllData();
+    renderTab("accounts");
+  } catch (e) {
+    alert("삭제 실패: " + e.message);
+  }
+});
+
+// =========================================
+// 검색 로그
+// =========================================
+function renderLogs() {
+  if (!isMaster()) return `<div class="alert alert-err on">master 권한이 필요합니다.</div>`;
+  
+  return `
+    <div class="page-hdr"><div class="page-title">📋 검색 로그 <small>(최근 100건)</small></div></div>
+    
+    <div class="tbl-wrap">
+      <table class="dtbl">
+        <thead>
+          <tr><th>시간</th><th>질문</th><th>모드</th><th>결과 수</th><th>응답시간</th></tr>
+        </thead>
+        <tbody>
+          ${DATA_LOGS.length === 0 ? `<tr><td colspan="5" style="padding:40px;text-align:center;color:#94a3c0;">아직 검색 로그가 없습니다.</td></tr>` :
+            DATA_LOGS.map(l => `
+              <tr>
+                <td style="white-space:nowrap;font-size:11px;color:#94a3c0;">${l.timestamp ? new Date(l.timestamp.toMillis()).toLocaleString() : "-"}</td>
+                <td>${escapeHtml(l.query || "")}</td>
+                <td><span class="tag t-policy">${l.mode || "-"}</span></td>
+                <td>${l.result_count || 0}</td>
+                <td>${l.elapsed_ms || 0}ms</td>
+              </tr>
+            `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+// =========================================
+// 관리자 로그
+// =========================================
+function renderAdminLogs() {
+  if (!isMaster()) return `<div class="alert alert-err on">master 권한이 필요합니다.</div>`;
+  
+  return `
+    <div class="page-hdr"><div class="page-title">📜 관리자 로그 <small>(최근 100건)</small></div></div>
+    
+    <div class="tbl-wrap">
+      <table class="dtbl">
+        <thead>
+          <tr><th>시간</th><th>사용자</th><th>작업</th><th>상세</th></tr>
+        </thead>
+        <tbody>
+          ${DATA_ADMIN_LOGS.length === 0 ? `<tr><td colspan="4" style="padding:40px;text-align:center;color:#94a3c0;">아직 로그가 없습니다.</td></tr>` :
+            DATA_ADMIN_LOGS.map(l => `
+              <tr>
+                <td style="white-space:nowrap;font-size:11px;color:#94a3c0;">${l.timestamp ? new Date(l.timestamp.toMillis()).toLocaleString() : "-"}</td>
+                <td style="font-size:12px;">${escapeHtml(l.user_email || "-")}</td>
+                <td><span class="tag t-policy">${l.action || "-"}</span></td>
+                <td style="font-size:12px;color:#4b5680;">${escapeHtml(JSON.stringify(l.detail || {}))}</td>
+              </tr>
+            `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+// =========================================
+// 도움말
+// =========================================
+function renderHelp() {
+  return `
+    <div class="page-hdr"><div class="page-title">📖 사용방법</div></div>
+    
+    <div class="setup-card">
+      <h3>🎯 시스템 구조</h3>
+      <div class="desc">
+        • <strong>검색 페이지</strong> (index.html): 누구나 접속 가능. 자료 검색 + AI 답변<br>
+        • <strong>관리자 페이지</strong> (admin.html): 허가된 사용자만. 자료 추가/수정/삭제, 권한 관리, 로그 조회<br>
+        • <strong>Firebase Firestore</strong>: 모든 데이터 저장 (자료, 권한, 로그)<br>
+        • <strong>Gemini API</strong>: AI 답변 생성 (무료, 일 1,500회)
+      </div>
+    </div>
+    
+    <div class="setup-card">
+      <h3>1️⃣ 새 자료 추가</h3>
+      <div class="desc">
+        1. 좌측 메뉴에서 <strong>Q&A / 매뉴얼 / 규정</strong> 중 적합한 카테고리 선택<br>
+        2. <strong>"+ 새 항목 추가"</strong> 버튼 클릭<br>
+        3. 출처, 카테고리, 제목, 내용 입력 후 저장<br>
+        4. 저장 시 자동으로 임베딩이 생성되어 검색에 즉시 반영됩니다.
+      </div>
+    </div>
+    
+    <div class="setup-card">
+      <h3>2️⃣ 사용자 권한 추가</h3>
+      <div class="desc">
+        1. <strong>권한 관리</strong> 메뉴 → "+ 사용자 추가"<br>
+        2. 추가할 사용자의 Google 이메일 입력<br>
+        3. 권한 레벨 선택 (viewer / manager / master)<br>
+        4. 해당 사용자가 admin.html에 접속해 본인 계정으로 로그인하면 사용 가능
+      </div>
+    </div>
+    
+    <div class="setup-card">
+      <h3>3️⃣ Gemini API 키 보안</h3>
+      <div class="desc">
+        검색 페이지는 로그인 없이 동작하므로 API 키가 브라우저에 노출됩니다.<br>
+        키 도용을 막으려면 <strong>Google Cloud Console</strong>에서 다음 설정 필수:<br><br>
+        1. <a href="https://console.cloud.google.com/apis/credentials" target="_blank" style="color:#2563eb;">console.cloud.google.com/apis/credentials</a> 접속<br>
+        2. Gemini API 키 선택 → "애플리케이션 제한사항"<br>
+        3. <strong>HTTP 추천자(웹사이트)</strong> 선택<br>
+        4. 다음 추가:<br>
+        &nbsp;&nbsp;&nbsp;• <code>https://본인계정.github.io/*</code><br>
+        &nbsp;&nbsp;&nbsp;• <code>http://localhost:*</code> (테스트용)<br>
+        5. 저장
+      </div>
+    </div>
+    
+    <div class="setup-card">
+      <h3>💰 비용 관리</h3>
+      <div class="desc">
+        모든 서비스를 <strong>완전 무료 한도 내에서</strong> 사용하도록 설계되었습니다.<br>
+        • Firebase Spark 플랜 (카드 등록 X): Firestore 일 5만 읽기, Auth 무제한<br>
+        • Gemini API: 일 1,500회 무료<br>
+        • GitHub Pages: 무제한 무료<br><br>
+        검색 페이지가 캐시를 적극 활용하여 Firestore 읽기를 최소화합니다.
+      </div>
+    </div>
+  `;
+}
+
+function escapeHtml(s) {
+  return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+</script>
+
+</body>
+</html>
