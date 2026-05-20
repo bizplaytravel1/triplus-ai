@@ -172,33 +172,20 @@ const firebaseConfig = {
   messagingSenderId: "424940526706",
   appId: "1:424940526706:web:9857867a77bfdfdafff6eb"
 };
-  
-// 시스템 프롬프트 (답변 형식)
-const SYSTEM_PROMPT = `당신은 현대자동차 트리플러스(TRIP+) 출장관리 Q&A 도우미입니다.
-제공된 자료만 근거로 답변하며, 자료에 없는 내용은 절대 추측하지 않습니다.
+
+// 시스템 프롬프트 (간결 버전 - 토큰 절약)
+const SYSTEM_PROMPT = `현대자동차 트리플러스(TRIP+) 출장관리 Q&A 도우미. 제공된 자료만 근거로 답변, 없는 내용은 추측 X.
 
 답변 형식:
-[복잡한 질문 - 문제 해결형]
-1. **답변**: 결론을 1~4문장으로 먼저 제시
-2. **문제**: 사용자가 겪는 상황을 bullet로 정리
-3. **원인**: 왜 그런 일이 발생하는지 (규정/정책 근거 명시)
-4. **해결**: 구체적 조치를 단계별 표 또는 bullet로 정리
-5. **참고**: 답변 근거 자료 명시
-
-[단순 정보 조회 - 얼마/누가/언제]
-1. **답변**: 결론을 1~4문장으로 제시
-2. **관련 정보**: 표 형태로 핵심 데이터 정리
-3. **참고**: 출처 명시
-
-[선택지가 있는 경우]
-반드시 장단점 비교표 포함
+1) 결론 1~3문장 먼저
+2) 필요 시 표 또는 bullet
+3) 끝에 출처 1줄
 
 규칙:
-- 자료에 없는 내용은 "자료에 명시되어 있지 않음"으로 응답
-- 추측, 일반 상식 기반 답변 금지
-- 모든 답변 끝에 출처 명시
-- 감정 표현/사과 표현 금지
-- "일반적으로", "보통" 같은 모호한 표현 금지`;
+- 자료에 없으면 "자료에 명시 없음"
+- 추측, 일반상식 답변 금지
+- 사과/감정 표현 금지
+- 간결하게`;
 
 // 전역 변수
 firebase.initializeApp(firebaseConfig);
@@ -339,10 +326,10 @@ async function doSearch() {
     let topChunks;
     if (HAS_EMBEDDINGS) {
       document.getElementById("aiSub").textContent = "의미 검색 중...";
-      topChunks = await searchSemantic(query, 7);
+      topChunks = await searchSemantic(query, 4);
     } else {
       document.getElementById("aiSub").textContent = "키워드 검색 중...";
-      topChunks = searchKeyword(query, 7);
+      topChunks = searchKeyword(query, 4);
     }
     
     if (topChunks.length === 0) {
@@ -455,17 +442,33 @@ function searchKeyword(query, topK) {
 }
 
 // ====================================================
-// Gemini 답변 생성
+// Gemini 답변 생성 (가벼운 버전 - 토큰 절약 + 캐싱)
 // ====================================================
 async function generateAnswer(query, topChunks) {
+  // [캐싱] 동일 질문이면 캐시 반환 (quota 절약!)
+  const cacheKey = "ans_" + simpleHash(query.toLowerCase().trim());
+  try {
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+      const obj = JSON.parse(cached);
+      // 24시간 이내 캐시면 사용
+      if (Date.now() - obj.ts < 24 * 60 * 60 * 1000) {
+        console.log("✓ 캐시된 답변 사용 (quota 절약)");
+        return obj.answer + "\n\n*(이전 답변 캐시 사용 · API 호출 0회)*";
+      }
+    }
+  } catch (e) { /* 캐시 실패는 무시 */ }
+  
+  // [토큰 절약] 자료 content 600자로 제한
   const context = topChunks.map((x, i) => {
     const c = x.chunk;
-    return `[자료 ${i+1}] 출처: ${c.source}${c.category ? " / " + c.category : ""}
-제목: ${c.title}
-내용: ${c.content}`;
-  }).join("\n\n---\n\n");
+    const content = (c.content || "").slice(0, 600);
+    return `[자료${i+1}] ${c.source}/${c.category || ""}
+${c.title}
+${content}`;
+  }).join("\n---\n");
   
-  const userMsg = `[참고 자료]\n${context}\n\n[사용자 질문]\n${query}\n\n위 자료만 근거로, 시스템 지시한 형식대로 답변하세요.`;
+  const userMsg = `[참고 자료]\n${context}\n\n[질문]\n${query}\n\n위 자료만 근거로 간결히 답변.`;
   
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`;
   
@@ -475,7 +478,7 @@ async function generateAnswer(query, topChunks) {
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
       contents: [{ role: "user", parts: [{ text: userMsg }] }],
-      generationConfig: { temperature: 0.2, maxOutputTokens: 2048 }
+      generationConfig: { temperature: 0.2, maxOutputTokens: 1024 }
     })
   });
   
@@ -485,7 +488,24 @@ async function generateAnswer(query, topChunks) {
   }
   const data = await res.json();
   if (!data.candidates || !data.candidates[0]) throw new Error("응답이 비어있습니다");
-  return data.candidates[0].content.parts[0].text;
+  const answer = data.candidates[0].content.parts[0].text;
+  
+  // [캐싱] 답변 저장 (다음 번 동일 질문 시 quota 0 사용)
+  try {
+    localStorage.setItem(cacheKey, JSON.stringify({ answer, ts: Date.now() }));
+  } catch (e) { /* 캐시 저장 실패 무시 */ }
+  
+  return answer;
+}
+
+// 간단한 문자열 해시 (캐시 키용)
+function simpleHash(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash) + str.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash).toString(36);
 }
 
 // ====================================================
