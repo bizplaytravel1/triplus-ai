@@ -186,19 +186,62 @@ const firebaseConfig = {
   appId: "1:816305774166:web:2de540a4375dd232f525f7"
 };
 
-// 시스템 프롬프트 (간결 버전 - 토큰 절약)
-const SYSTEM_PROMPT = `현대자동차 트리플러스(TRIP+) 출장관리 Q&A 도우미. 제공된 자료만 근거로 답변, 없는 내용은 추측 X.
+// 시스템 프롬프트 (압축 스타일 - 한눈에 보이는 핵심 답변)
+const SYSTEM_PROMPT = `당신은 현대자동차 트리플러스(TRIP+) 출장관리 Q&A 도우미입니다. 제공된 자료만 근거로 답변하며, 없는 내용은 추측하지 마세요.
 
-답변 형식:
-1) 결론 1~3문장 먼저
-2) 필요 시 표 또는 bullet
-3) 끝에 출처 1줄
+답변 형식 (반드시 준수):
 
-규칙:
-- 자료에 없으면 "자료에 명시 없음"
-- 추측, 일반상식 답변 금지
-- 사과/감정 표현 금지
-- 간결하게`;
+1. 첫 줄: "답변: [결론 한 문장]" 형식으로 시작
+2. 본문은 한눈에 들어오게 압축 (단순 질문 3-5줄, 복잡한 질문도 10줄 이내 목표)
+3. 비교 가능한 정보는 표로 정리 (컬럼 최소화)
+4. 필요 시 bullet point 사용 (- 로 시작)
+5. 우선순위 표시는 [필수], [주의], [확인] 태그로
+6. 마지막에 📎 출처 1줄
+
+금지 사항:
+- 마크다운 헤더 (##, ###) 사용 금지
+- 굵은 글씨 (**) 거의 사용 금지 (꼭 필요한 핵심 키워드만)
+- 인사말, 사과, "도움이 되셨길 바랍니다" 류 절대 금지
+- 자료에 없는 내용 추측 금지 → "자료에 명시 없음" 표기
+- 긴 문단 금지 → 짧은 문장으로 끊기
+
+업무 외 질문 (잡담, 창작 등):
+"현대자동차 트리플러스(TRIP+) 출장관리 Q&A 도우미입니다. 출장 규정, 정산 방법, 시스템 사용법을 안내해드립니다." 한 문장만 답변.
+
+예시:
+
+[단순 질문] 임원 일비는 얼마인가요?
+답변: 임원 일비는 직급별 차등 지급. 일반 직원과 별도 체계.
+
+| 직급 | 일비 |
+|------|------|
+| 사장급 | 100,000원 |
+| 부사장급 | 80,000원 |
+| 상무·전무 | 60,000원 |
+
+- 국내 출장 1일 기준 · 식대 별도 (실비)
+- 정산 시한: 4주 이내
+
+📎 출장규정집 제○조
+
+[절차 질문] 출장 4주 미정산 시 어떻게 되나요?
+답변: 4주 경과 시 자동회수. 본부장 승인 시 1회 연장 가능.
+
+처리 단계:
+- 4주차: 자동 알림
+- 5주차: 1차 회수 통보
+- 6주차: 자동회수 → 급여 차감
+
+[필수] 4주 이내 정산서 제출
+[주의] 본부장 사전 승인 시 최대 2주 연장
+[확인] 복구: 30일 내 사유 소명 + 인사팀 승인
+
+📎 정산 규정 제○조
+
+[자료 부족] 외주직원 출장비 기준?
+답변: 자료에 명시 없음. 인사팀 또는 계약 담당 부서 문의 필요.
+
+📎 자료 출처 없음`;
 
 // 전역 변수
 firebase.initializeApp(firebaseConfig);
@@ -236,26 +279,40 @@ async function init() {
       console.warn("Groq 키 없음. Gemini 답변 생성 사용 (quota 제한 있음)");
     }
     
-    // 2. 자료 버전 확인 (캐시 사용 여부 결정)
-    const versionDoc = await db.collection("config").doc("version").get();
-    const serverVersion = versionDoc.exists ? versionDoc.data().updated_at?.toMillis() || 0 : 0;
-    const cachedVersion = parseInt(localStorage.getItem("triplus_chunks_version") || "0");
+    // 2. 자료 로드 - 캐시 우선 사용 (Firebase reads 최소화)
+    const CACHE_KEY = "triplus_chunks_cache";
+    const CACHE_TIME_KEY = "triplus_chunks_cache_time";
+    const CACHE_COUNT_KEY = "triplus_chunks_count";
+    const CACHE_MAX_AGE = 24 * 60 * 60 * 1000; // 24시간
     
-    if (serverVersion > 0 && cachedVersion === serverVersion) {
-      // 캐시 사용
-      const cached = localStorage.getItem("triplus_chunks_cache");
-      if (cached) {
+    // 강제 새로고침 체크 (?refresh=1)
+    const urlParams = new URLSearchParams(window.location.search);
+    const forceRefresh = urlParams.get('refresh') === '1';
+    
+    const cached = localStorage.getItem(CACHE_KEY);
+    const cacheTime = parseInt(localStorage.getItem(CACHE_TIME_KEY) || "0");
+    const cacheAge = Date.now() - cacheTime;
+    const isValid = !forceRefresh && cached && cacheAge < CACHE_MAX_AGE;
+    
+    if (isValid) {
+      try {
         const data = JSON.parse(cached);
         CHUNKS = data.chunks;
-        EMBEDDINGS = data.embeddings;
+        EMBEDDINGS = data.embeddings || {};
         HAS_EMBEDDINGS = Object.keys(EMBEDDINGS).length > 0;
-        console.log(`✓ 캐시 사용: ${CHUNKS.length}개 청크`);
-        setStatus(`✓ 준비 완료 (${CHUNKS.length}개)`, "ok");
+        const ageHours = Math.round(cacheAge / 1000 / 60 / 60);
+        console.log(`✓ 캐시 사용: ${CHUNKS.length}개 청크 (Firebase reads 0, ${ageHours}시간 전)`);
+        setStatus(`✓ 준비 완료 (${CHUNKS.length}개, 캐시)`, "ok");
+        
+        // 백그라운드에서 자료 변경 감지 (1 read만)
+        setTimeout(() => checkForUpdates(CHUNKS.length), 2000);
         return;
+      } catch (e) {
+        console.warn("캐시 파싱 실패, 새로 로드:", e);
       }
     }
     
-    // 3. Firestore에서 청크 로드
+    // 3. Firestore에서 청크 로드 (캐시 없거나 만료)
     setStatus("자료 로드 중...", "warn");
     const snap = await db.collection("chunks").get();
     
@@ -280,11 +337,13 @@ async function init() {
     
     // 4. 캐시 저장
     try {
-      localStorage.setItem("triplus_chunks_cache", JSON.stringify({
+      localStorage.setItem(CACHE_KEY, JSON.stringify({
         chunks: CHUNKS,
         embeddings: EMBEDDINGS
       }));
-      localStorage.setItem("triplus_chunks_version", String(serverVersion));
+      localStorage.setItem(CACHE_TIME_KEY, String(Date.now()));
+      localStorage.setItem(CACHE_COUNT_KEY, String(CHUNKS.length));
+      console.log(`✓ 캐시 저장: ${CHUNKS.length}개 (다음 24시간 동안 Firebase reads 0)`);
     } catch (e) {
       console.warn("캐시 저장 실패 (용량 부족 가능):", e);
     }
@@ -303,6 +362,51 @@ function setStatus(text, type) {
   const el = document.getElementById("statusBadge");
   el.textContent = text;
   el.className = "status-badge status-" + type;
+}
+
+// ====================================================
+// 백그라운드 자료 변경 감지 (Firebase reads 최소화)
+// 캐시 사용 후 가장 최근 문서 1개만 확인 (1 read만)
+// ====================================================
+async function checkForUpdates(cachedCount) {
+  try {
+    // 자료 변경 감지: count() 시도, 실패 시 무시
+    let serverCount = null;
+    
+    // 방법 1: count() (v9.6+ 지원)
+    try {
+      const countSnap = await db.collection("chunks").count().get();
+      serverCount = countSnap.data().count;
+    } catch (countErr) {
+      // count() 안 되면 백그라운드 체크 그냥 패스
+      console.log("자료 변경 감지 패스 (count 미지원)");
+      return;
+    }
+    
+    if (serverCount !== null && serverCount !== cachedCount) {
+      console.log(`📥 자료 변경 감지: 캐시 ${cachedCount}개 → 서버 ${serverCount}개`);
+      
+      // 사용자에게 알림 (상태 배지 클릭 가능하게)
+      const badge = document.getElementById("statusBadge");
+      if (badge) {
+        badge.textContent = `⚠ 자료 업데이트 (클릭하여 새로고침)`;
+        badge.className = "status-badge status-warn";
+        badge.style.cursor = "pointer";
+        badge.title = "클릭 시 새 자료 가져오기";
+        badge.onclick = () => {
+          localStorage.removeItem("triplus_chunks_cache");
+          localStorage.removeItem("triplus_chunks_cache_time");
+          localStorage.removeItem("triplus_chunks_count");
+          window.location.href = window.location.pathname + "?refresh=1";
+        };
+      }
+    } else {
+      console.log(`✓ 자료 최신 상태 (${serverCount}개)`);
+    }
+  } catch (e) {
+    // 변경 감지 실패는 무시 (캐시 그대로 사용)
+    console.warn("자료 변경 감지 실패:", e.message);
+  }
 }
 
 // ====================================================
@@ -463,16 +567,19 @@ async function doSearch() {
     renderSources(topChunks);
     sourcesSection.style.display = "block";
     
-    // 4. 로그 기록 (비동기, 실패해도 무시)
-    try {
-      db.collection("search_logs").add({
-        query: query.slice(0, 200),
-        mode: HAS_EMBEDDINGS ? "semantic" : "keyword",
-        result_count: topChunks.length,
-        elapsed_ms: elapsed,
-        timestamp: firebase.firestore.FieldValue.serverTimestamp()
-      });
-    } catch (e) { console.warn("로그 실패:", e); }
+    // 4. 로그 기록 (캐시 답변일 땐 스킵, write 절약)
+    const isCached = answer.includes("이전 답변 캐시 사용");
+    if (!isCached) {
+      try {
+        db.collection("search_logs").add({
+          query: query.slice(0, 200),
+          mode: HAS_EMBEDDINGS ? "semantic" : "keyword",
+          result_count: topChunks.length,
+          elapsed_ms: elapsed,
+          timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      } catch (e) { console.warn("로그 실패:", e); }
+    }
     
   } catch (e) {
     console.error(e);
