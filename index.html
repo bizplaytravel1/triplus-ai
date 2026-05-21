@@ -51,6 +51,9 @@ header { background: var(--surface); border-bottom: 1px solid var(--border); pad
 .si-icon { color: var(--text3); margin-right: 12px; font-size: 16px; }
 .search-input { flex: 1; background: none; border: none; outline: none; color: var(--text); font-family: 'Noto Sans KR', sans-serif; font-size: 15px; padding: 16px 0; }
 .search-input::placeholder { color: var(--text3); }
+.clear-btn { background: var(--surface2); color: var(--text2); border: none; cursor: pointer; width: 22px; height: 22px; border-radius: 50%; display: none; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; margin-left: 8px; transition: all 0.15s; padding: 0; line-height: 1; }
+.clear-btn:hover { background: #ef4444; color: #fff; }
+.clear-btn.show { display: flex; }
 .search-btn { background: var(--accent); color: #fff; border: none; cursor: pointer; border-radius: 12px; padding: 0 24px; font-family: 'Noto Sans KR', sans-serif; font-size: 14px; font-weight: 600; transition: all 0.15s; white-space: nowrap; min-width: 90px; }
 .search-btn:hover { background: #1d4ed8; }
 .search-btn:disabled { background: var(--text3); cursor: not-allowed; }
@@ -65,7 +68,10 @@ header { background: var(--surface); border-bottom: 1px solid var(--border); pad
 @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 .ai-hdr { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
 .ai-badge { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; font-size: 10px; font-weight: 700; padding: 3px 10px; border-radius: 4px; letter-spacing: 0.05em; }
-.ai-sub { font-size: 13px; color: var(--text2); }
+.ai-sub { font-size: 13px; color: var(--text2); flex: 1; }
+.copy-btn { background: var(--surface2); color: var(--text2); border: 1px solid var(--border); cursor: pointer; padding: 6px 12px; border-radius: 6px; font-family: 'Noto Sans KR', sans-serif; font-size: 12px; font-weight: 500; display: flex; align-items: center; gap: 6px; transition: all 0.15s; }
+.copy-btn:hover { border-color: var(--accent); color: var(--accent); }
+.copy-btn.copied { background: #dcfce7; color: #15803d; border-color: #86efac; }
 .ai-content { font-size: 14.5px; line-height: 1.85; color: var(--text); }
 .ai-content strong { color: var(--accent); font-weight: 700; }
 .ai-content h3 { color: var(--accent); font-size: 14px; margin-top: 18px; margin-bottom: 8px; }
@@ -132,6 +138,7 @@ header { background: var(--surface); border-bottom: 1px solid var(--border); pad
     <div class="search-input-wrap">
       <span class="si-icon">🔍</span>
       <input type="text" class="search-input" id="searchInput" placeholder="예: 출장 끝나고 4주 동안 정산 못 했는데 어떻게 되나요?" autocomplete="off">
+      <button class="clear-btn" id="clearBtn" type="button" title="입력 내용 지우기">✕</button>
     </div>
     <button class="search-btn" id="searchBtn" onclick="doSearch()">AI 검색</button>
   </div>
@@ -149,6 +156,10 @@ header { background: var(--surface); border-bottom: 1px solid var(--border); pad
     <div class="ai-hdr">
       <span class="ai-badge">AI 답변</span>
       <span class="ai-sub" id="aiSub">현대자동차 트리플러스 자료 기반</span>
+      <button class="copy-btn" id="copyBtn" type="button" onclick="copyAnswer()" style="display:none;" title="답변 복사">
+        <span id="copyBtnIcon">📋</span>
+        <span id="copyBtnText">복사</span>
+      </button>
     </div>
     <div class="ai-content" id="aiContent"></div>
     <div class="sources-section" id="sourcesSection" style="display:none;">
@@ -297,8 +308,94 @@ function setStatus(text, type) {
 // ====================================================
 // 검색
 // ====================================================
+
+// X 버튼 (입력 내용 지우기)
+(function setupClearBtn() {
+  const input = document.getElementById("searchInput");
+  const clearBtn = document.getElementById("clearBtn");
+  if (!input || !clearBtn) return;
+  
+  // 입력 변화 감지 → X 버튼 표시/숨김
+  function toggleClear() {
+    if (input.value.length > 0) {
+      clearBtn.classList.add("show");
+    } else {
+      clearBtn.classList.remove("show");
+    }
+  }
+  
+  input.addEventListener("input", toggleClear);
+  input.addEventListener("change", toggleClear);
+  
+  // X 클릭 → 내용 삭제 + 포커스
+  clearBtn.addEventListener("click", function() {
+    input.value = "";
+    clearBtn.classList.remove("show");
+    input.focus();
+  });
+  
+  // Enter 키로 검색
+  input.addEventListener("keydown", function(e) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      doSearch();
+    }
+  });
+})();
+
+// 답변 복사 함수
+let _lastAnswer = "";
+
+function copyAnswer() {
+  if (!_lastAnswer) return;
+  
+  const copyBtn = document.getElementById("copyBtn");
+  const copyText = document.getElementById("copyBtnText");
+  const copyIcon = document.getElementById("copyBtnIcon");
+  
+  // 클립보드 API 사용
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(_lastAnswer).then(() => {
+      showCopySuccess();
+    }).catch(() => {
+      fallbackCopy(_lastAnswer);
+    });
+  } else {
+    fallbackCopy(_lastAnswer);
+  }
+  
+  function showCopySuccess() {
+    copyBtn.classList.add("copied");
+    copyIcon.textContent = "✓";
+    copyText.textContent = "복사됨!";
+    setTimeout(() => {
+      copyBtn.classList.remove("copied");
+      copyIcon.textContent = "📋";
+      copyText.textContent = "복사";
+    }, 2000);
+  }
+  
+  function fallbackCopy(text) {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.style.position = "fixed";
+    textarea.style.top = "-9999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+    try {
+      document.execCommand("copy");
+      showCopySuccess();
+    } catch (e) {
+      alert("복사 실패. 직접 선택해서 복사해주세요.");
+    }
+    document.body.removeChild(textarea);
+  }
+}
+
 function setQ(q) {
   document.getElementById("searchInput").value = q;
+  // X 버튼 표시 트리거
+  document.getElementById("clearBtn").classList.add("show");
   doSearch();
 }
 
@@ -351,11 +448,17 @@ async function doSearch() {
     
     const answer = await generateAnswer(query, topChunks);
     
+    // 답변 저장 (복사 버튼용)
+    _lastAnswer = answer;
+    
     // 3. 렌더링
     aiContent.innerHTML = renderMarkdown(answer);
     const elapsed = Date.now() - startTime;
     document.getElementById("aiSub").textContent = 
       `${HAS_EMBEDDINGS ? "의미 검색" : "키워드 검색"} · ${topChunks.length}개 자료 · ${elapsed}ms`;
+    
+    // 복사 버튼 표시
+    document.getElementById("copyBtn").style.display = "flex";
     
     renderSources(topChunks);
     sourcesSection.style.display = "block";
