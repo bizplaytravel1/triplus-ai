@@ -164,8 +164,10 @@ header { background: var(--surface); border-bottom: 1px solid var(--border); pad
 // ⚠️ 본인 Firebase 프로젝트 설정으로 교체하세요
 // Firebase Console > 프로젝트 설정 > 일반 > "내 앱"에서 복사
 // ====================================================
+// ⚠️ triplus-ai-821a7 프로젝트 firebaseConfig
+// 만약 apiKey가 차단/변경됐으면 GitHub에서 본인 값으로 교체!
 const firebaseConfig = {
-  apiKey: "AIzaSyB7iRmGK1tZnhncEH7sjaydZ8zHElqNpww",
+  apiKey: "AIzaSyDsIgOwLurG64hmWgmksdrWyfxrsCIK_hA",
   authDomain: "triplus-ai-821a7.firebaseapp.com",
   projectId: "triplus-ai-821a7",
   storageBucket: "triplus-ai-821a7.firebasestorage.app",
@@ -194,6 +196,7 @@ const db = firebase.firestore();
 let CHUNKS = [];
 let EMBEDDINGS = {};
 let GEMINI_KEY = "";
+let GROQ_KEY = "";
 let HAS_EMBEDDINGS = false;
 
 // ====================================================
@@ -203,18 +206,23 @@ async function init() {
   setStatus("연결 중...", "warn");
   
   try {
-    // 1. config에서 Gemini API 키 가져오기
+    // 1. config에서 API 키 가져오기 (Gemini + Groq)
     const configDoc = await db.collection("config").doc("public").get();
     if (!configDoc.exists) {
       setStatus("설정 필요", "err");
       showError("관리자가 아직 시스템을 초기화하지 않았습니다.<br>관리자 페이지에서 초기 설정을 완료해주세요.");
       return;
     }
-    GEMINI_KEY = configDoc.data().gemini_api_key;
-    if (!GEMINI_KEY) {
+    GEMINI_KEY = configDoc.data().gemini_api_key || "";
+    GROQ_KEY = configDoc.data().groq_api_key || "";
+    
+    if (!GEMINI_KEY && !GROQ_KEY) {
       setStatus("API 키 없음", "err");
-      showError("Gemini API 키가 설정되지 않았습니다.<br>관리자 페이지에서 API 키를 등록해주세요.");
+      showError("API 키가 설정되지 않았습니다.<br>관리자가 Gemini 또는 Groq 키를 등록해주세요.");
       return;
+    }
+    if (!GROQ_KEY) {
+      console.warn("Groq 키 없음. Gemini 답변 생성 사용 (quota 제한 있음)");
     }
     
     // 2. 자료 버전 확인 (캐시 사용 여부 결정)
@@ -388,6 +396,9 @@ async function searchSemantic(query, topK) {
 }
 
 async function embedQuery(text) {
+  if (!GEMINI_KEY) {
+    throw new Error("Gemini API 키가 등록되지 않았습니다. 관리자가 Gemini 키를 Firestore에 등록해야 합니다.");
+  }
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=${GEMINI_KEY}`;
   const res = await fetch(url, {
     method: "POST",
@@ -400,7 +411,13 @@ async function embedQuery(text) {
   });
   if (!res.ok) {
     const err = await res.text();
-    throw new Error(`임베딩 오류: ${err.slice(0, 100)}`);
+    if (res.status === 429) {
+      throw new Error(`임베딩 quota 초과. 잠시 후 다시 시도하거나 관리자에게 Gemini 키 갱신을 문의하세요.`);
+    }
+    if (res.status === 400 || res.status === 403) {
+      throw new Error(`Gemini 키 문제 (${res.status}). 관리자가 Firestore의 gemini_api_key를 새 키로 갱신해야 합니다.`);
+    }
+    throw new Error(`임베딩 오류 (${res.status}): ${err.slice(0, 100)}`);
   }
   const data = await res.json();
   return data.embedding.values;
@@ -442,7 +459,7 @@ function searchKeyword(query, topK) {
 }
 
 // ====================================================
-// Gemini 답변 생성 (가벼운 버전 - 토큰 절약 + 캐싱)
+// AI 답변 생성 (Groq 전용 - Gemini 폴백 없음)
 // ====================================================
 async function generateAnswer(query, topChunks) {
   // [캐싱] 동일 질문이면 캐시 반환 (quota 절약!)
@@ -470,32 +487,49 @@ ${content}`;
   
   const userMsg = `[참고 자료]\n${context}\n\n[질문]\n${query}\n\n위 자료만 근거로 간결히 답변.`;
   
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`;
+  // ★ Groq 사용 (Gemini 폴백 없음 - quota 부담 X)
+  if (!GROQ_KEY) {
+    throw new Error("Groq API 키가 등록되지 않았습니다. 관리자에게 문의하세요.");
+  }
   
-  const res = await fetch(url, {
+  const answer = await callGroq(userMsg);
+  cacheAnswer(cacheKey, answer);
+  return answer;
+}
+
+// Groq API 호출 (Llama 3.3 70B - 한국어 좋음)
+async function callGroq(userMsg) {
+  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Authorization": `Bearer ${GROQ_KEY}`,
+      "Content-Type": "application/json"
+    },
     body: JSON.stringify({
-      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-      contents: [{ role: "user", parts: [{ text: userMsg }] }],
-      generationConfig: { temperature: 0.2, maxOutputTokens: 1024 }
+      model: "llama-3.3-70b-versatile",
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: userMsg }
+      ],
+      max_tokens: 1024,
+      temperature: 0.2
     })
   });
   
   if (!res.ok) {
     const errText = await res.text();
-    throw new Error(`AI 오류 (${res.status}): ${errText.slice(0, 150)}`);
+    throw new Error(`Groq 오류 (${res.status}): ${errText.slice(0, 200)}`);
   }
   const data = await res.json();
-  if (!data.candidates || !data.candidates[0]) throw new Error("응답이 비어있습니다");
-  const answer = data.candidates[0].content.parts[0].text;
-  
-  // [캐싱] 답변 저장 (다음 번 동일 질문 시 quota 0 사용)
+  if (!data.choices || !data.choices[0]) throw new Error("Groq 응답이 비어있습니다");
+  return data.choices[0].message.content;
+}
+
+// 답변 캐싱 헬퍼
+function cacheAnswer(cacheKey, answer) {
   try {
     localStorage.setItem(cacheKey, JSON.stringify({ answer, ts: Date.now() }));
   } catch (e) { /* 캐시 저장 실패 무시 */ }
-  
-  return answer;
 }
 
 // 간단한 문자열 해시 (캐시 키용)
