@@ -283,7 +283,8 @@ async function init() {
     const CACHE_KEY = "triplus_chunks_cache";
     const CACHE_TIME_KEY = "triplus_chunks_cache_time";
     const CACHE_COUNT_KEY = "triplus_chunks_count";
-    const CACHE_MAX_AGE = 24 * 60 * 60 * 1000; // 24시간
+    const CACHE_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7일 (대폭 연장)
+    const CHECK_INTERVAL = 12 * 60 * 60 * 1000; // 백그라운드 체크 12시간마다만
     
     // 강제 새로고침 체크 (?refresh=1)
     const urlParams = new URLSearchParams(window.location.search);
@@ -304,8 +305,12 @@ async function init() {
         console.log(`✓ 캐시 사용: ${CHUNKS.length}개 청크 (Firebase reads 0, ${ageHours}시간 전)`);
         setStatus(`✓ 준비 완료 (${CHUNKS.length}개, 캐시)`, "ok");
         
-        // 백그라운드에서 자료 변경 감지 (1 read만)
-        setTimeout(() => checkForUpdates(CHUNKS.length), 2000);
+        // 백그라운드 변경 감지: 12시간마다만 (reads 절약)
+        if (cacheAge > CHECK_INTERVAL) {
+          setTimeout(() => checkForUpdates(CHUNKS.length), 2000);
+        } else {
+          console.log(`✓ 변경 감지 스킵 (다음 체크: ${Math.round((CHECK_INTERVAL - cacheAge) / 1000 / 60 / 60)}시간 후)`);
+        }
         return;
       } catch (e) {
         console.warn("캐시 파싱 실패, 새로 로드:", e);
