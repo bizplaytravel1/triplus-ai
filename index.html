@@ -178,7 +178,7 @@ header { background: var(--surface); border-bottom: 1px solid var(--border); pad
 // ⚠️ triplus-ai-821a7 프로젝트 firebaseConfig
 // 만약 apiKey가 차단/변경됐으면 GitHub에서 본인 값으로 교체!
 const firebaseConfig = {
-  apiKey: "AIzaSyB7iRmGK1tZnhncEH7sjaydZ8zHElqNpww",
+  apiKey: "AIzaSyDsIgOwLurG64hmWgmksdrWyfxrsCIK_hA",
   authDomain: "triplus-ai-821a7.firebaseapp.com",
   projectId: "triplus-ai-821a7",
   storageBucket: "triplus-ai-821a7.firebasestorage.app",
@@ -745,7 +745,70 @@ async function callGroq(userMsg) {
   }
   const data = await res.json();
   if (!data.choices || !data.choices[0]) throw new Error("Groq 응답이 비어있습니다");
-  return data.choices[0].message.content;
+  return postProcessKorean(data.choices[0].message.content);
+}
+
+// 답변 후처리: 외국어 단어 → 한국어 자동 변환
+function postProcessKorean(text) {
+  if (!text) return text;
+  let result = text;
+  
+  // 일본어 → 한국어 변환 (자주 나오는 연결어/접속어)
+  const jpReplacements = [
+    [/ただし[、,]?\s*/g, '다만, '],
+    [/しかし[、,]?\s*/g, '하지만, '],
+    [/また[、,]?\s*/g, '또한, '],
+    [/および/g, '및'],
+    [/なお[、,]?\s*/g, '참고로, '],
+    [/さらに[、,]?\s*/g, '추가로, '],
+    [/ところで[、,]?\s*/g, '그런데, '],
+    [/つまり[、,]?\s*/g, '즉, '],
+    [/もしくは/g, '또는'],
+    [/その他/g, '기타'],
+    [/について/g, '에 대해'],
+    [/および/g, '및'],
+    [/に関して/g, '에 관해'],
+    [/から/g, '부터'],
+    [/まで/g, '까지'],
+    [/より/g, '보다'],
+  ];
+  
+  // 영어 연결어 → 한국어 (단어 경계 \b 사용으로 안전)
+  const enReplacements = [
+    [/\bHowever,\s*/g, '하지만, '],
+    [/\bhowever,\s*/g, '하지만, '],
+    [/\bHowever\b/g, '하지만'],
+    [/\bBut,\s*/g, '하지만, '],
+    [/\bMoreover,\s*/g, '또한, '],
+    [/\bFurthermore,\s*/g, '또한, '],
+    [/\bAdditionally,\s*/g, '추가로, '],
+    [/\bTherefore,\s*/g, '따라서, '],
+    [/\bIn addition,\s*/g, '또한, '],
+    [/\bAlso,\s*/g, '또한, '],
+    [/\bFor example,\s*/g, '예를 들어, '],
+    [/\bFor instance,\s*/g, '예를 들어, '],
+    [/\bIn other words,\s*/g, '즉, '],
+    [/\bThus,\s*/g, '따라서, '],
+    [/\bHence,\s*/g, '따라서, '],
+    [/\bMeanwhile,\s*/g, '한편, '],
+    [/\bOn the other hand,\s*/g, '반면, '],
+    [/\bIn conclusion,\s*/g, '결론적으로, '],
+    [/\bAs a result,\s*/g, '그 결과, '],
+  ];
+  
+  jpReplacements.forEach(([pattern, korean]) => {
+    result = result.replace(pattern, korean);
+  });
+  enReplacements.forEach(([pattern, korean]) => {
+    result = result.replace(pattern, korean);
+  });
+  
+  // 일본어 문자(히라가나/가타카나)가 남아있으면 콘솔 경고
+  if (/[\u3040-\u309F\u30A0-\u30FF]/.test(result)) {
+    console.warn("⚠ 답변에 일본어 문자가 남아있습니다:", result.match(/[\u3040-\u309F\u30A0-\u30FF]+/g));
+  }
+  
+  return result;
 }
 
 // 답변 캐싱 헬퍼
