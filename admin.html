@@ -239,17 +239,18 @@ header { background: #1a1f36; padding: 0 24px; display: flex; align-items: cente
 
 <script>
 // =========================================
-// ⚠️ 본인 Firebase 프로젝트 설정으로 교체
+// ⚠️ triplus-ai-821a7 프로젝트 firebaseConfig
+// 만약 apiKey가 차단/변경됐으면 본인 값으로 교체!
 // =========================================
 const firebaseConfig = {
-  apiKey: "AIzaSyB7iRmGK1tZnhncEH7sjaydZ8zHElqNpww",
+  apiKey: "AIzaSyDsIgOwLurG64hmWgmksdrWyfxrsCIK_hA",
   authDomain: "triplus-ai-821a7.firebaseapp.com",
   projectId: "triplus-ai-821a7",
   storageBucket: "triplus-ai-821a7.firebasestorage.app",
   messagingSenderId: "816305774166",
   appId: "1:816305774166:web:2de540a4375dd232f525f7"
 };
-  
+
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
@@ -372,10 +373,55 @@ async function logAdminAction(action, detail) {
 }
 
 // =========================================
-// 데이터 로드
+// 데이터 로드 (강력한 캐싱 - Firebase reads 최소화)
 // =========================================
+const ADMIN_CACHE_KEY = "triplus_admin_data_cache";
+const ADMIN_CACHE_TIME_KEY = "triplus_admin_data_cache_time";
+const ADMIN_CACHE_MAX_AGE = 30 * 60 * 1000; // 30분
+
+function invalidateAdminCache() {
+  // 자료 추가/수정/삭제 시 호출되어 캐시를 무효화
+  try {
+    sessionStorage.removeItem(ADMIN_CACHE_KEY);
+    sessionStorage.removeItem(ADMIN_CACHE_TIME_KEY);
+    console.log("✓ Admin 캐시 무효화");
+  } catch (e) {}
+}
+
 async function loadAllData() {
   try {
+    // 강제 새로고침 체크 (?refresh=1)
+    const urlParams = new URLSearchParams(window.location.search);
+    const forceRefresh = urlParams.get('refresh') === '1';
+    
+    // 캐시 우선 사용 (reads 0!)
+    if (!forceRefresh) {
+      try {
+        const cached = sessionStorage.getItem(ADMIN_CACHE_KEY);
+        const cacheTime = parseInt(sessionStorage.getItem(ADMIN_CACHE_TIME_KEY) || "0");
+        const cacheAge = Date.now() - cacheTime;
+        
+        if (cached && cacheAge < ADMIN_CACHE_MAX_AGE) {
+          const data = JSON.parse(cached);
+          DATA_QA = data.qa || [];
+          DATA_MANUAL = data.manual || [];
+          DATA_RULES = data.rules || [];
+          DATA_ACCOUNTS = data.accounts || [];
+          DATA_LOGS = data.logs || [];
+          DATA_ADMIN_LOGS = data.adminLogs || [];
+          
+          updateCountDisplay();
+          const ageMin = Math.round(cacheAge / 1000 / 60);
+          console.log(`✓ Admin 캐시 사용 (Firebase reads 0, ${ageMin}분 전)`);
+          return;
+        }
+      } catch (e) {
+        console.warn("캐시 파싱 실패:", e);
+      }
+    }
+    
+    // 캐시 없거나 만료 → 새로 로드
+    console.log("Admin 데이터 새로 로드 중...");
     const [qaSnap, manSnap, ruleSnap, accSnap] = await Promise.all([
       db.collection("chunks").where("source_type", "==", "qa").get(),
       db.collection("chunks").where("source_type", "==", "manual").get(),
@@ -388,11 +434,7 @@ async function loadAllData() {
     DATA_RULES = ruleSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     DATA_ACCOUNTS = accSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     
-    document.getElementById("cntQa").textContent = DATA_QA.length;
-    document.getElementById("cntManual").textContent = DATA_MANUAL.length;
-    document.getElementById("cntRules").textContent = DATA_RULES.length;
-    document.getElementById("cntAccounts").textContent = DATA_ACCOUNTS.length;
-    
+    // 마스터만 로그 가져옴
     if (isMaster()) {
       const [logSnap, alSnap] = await Promise.all([
         db.collection("search_logs").orderBy("timestamp", "desc").limit(100).get(),
@@ -400,11 +442,39 @@ async function loadAllData() {
       ]);
       DATA_LOGS = logSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       DATA_ADMIN_LOGS = alSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-      document.getElementById("cntLogs").textContent = DATA_LOGS.length;
+    }
+    
+    updateCountDisplay();
+    
+    // 캐시 저장
+    try {
+      sessionStorage.setItem(ADMIN_CACHE_KEY, JSON.stringify({
+        qa: DATA_QA,
+        manual: DATA_MANUAL,
+        rules: DATA_RULES,
+        accounts: DATA_ACCOUNTS,
+        logs: DATA_LOGS,
+        adminLogs: DATA_ADMIN_LOGS
+      }));
+      sessionStorage.setItem(ADMIN_CACHE_TIME_KEY, String(Date.now()));
+      const totalReads = DATA_QA.length + DATA_MANUAL.length + DATA_RULES.length + DATA_ACCOUNTS.length + DATA_LOGS.length + DATA_ADMIN_LOGS.length;
+      console.log(`✓ Admin 캐시 저장 (다음 30분 동안 Firebase reads 0, 이번 로드: 약 ${totalReads} reads)`);
+    } catch (e) {
+      console.warn("캐시 저장 실패:", e);
     }
   } catch (e) {
     console.error("데이터 로드 실패:", e);
     alert("데이터 로드 실패: " + e.message);
+  }
+}
+
+function updateCountDisplay() {
+  document.getElementById("cntQa").textContent = DATA_QA.length;
+  document.getElementById("cntManual").textContent = DATA_MANUAL.length;
+  document.getElementById("cntRules").textContent = DATA_RULES.length;
+  document.getElementById("cntAccounts").textContent = DATA_ACCOUNTS.length;
+  if (isMaster() && document.getElementById("cntLogs")) {
+    document.getElementById("cntLogs").textContent = DATA_LOGS.length;
   }
 }
 
@@ -671,6 +741,7 @@ document.getElementById("modalSave").addEventListener("click", async () => {
       updated_at: firebase.firestore.FieldValue.serverTimestamp()
     });
     
+    invalidateAdminCache(); // 자료 변경 → admin 캐시 무효화
     closeModal();
     await loadAllData();
     renderTab(CURRENT_TAB);
@@ -692,6 +763,7 @@ document.getElementById("modalDel").addEventListener("click", async () => {
       updated_at: firebase.firestore.FieldValue.serverTimestamp()
     });
     logAdminAction("delete_item", { id: EDITING_ITEM.id, title: EDITING_ITEM.title?.slice(0, 50) });
+    invalidateAdminCache(); // 자료 삭제 → admin 캐시 무효화
     closeModal();
     await loadAllData();
     renderTab(CURRENT_TAB);
@@ -812,6 +884,7 @@ async function runSync() {
   });
   logAdminAction("sync_embeddings", { count: done });
   text.textContent += " - 완료!";
+  invalidateAdminCache(); // 임베딩 변경 → 캐시 무효화
   setTimeout(async () => {
     await loadAllData();
     renderTab("sync");
@@ -876,6 +949,7 @@ async function runBulkUpload() {
   });
   logAdminAction("bulk_upload", { count: done });
   txt.textContent += " - 완료!";
+  invalidateAdminCache(); // 일괄 업로드 → 캐시 무효화
   setTimeout(async () => {
     await loadAllData();
     renderTab("sync");
@@ -1022,6 +1096,7 @@ document.getElementById("accSave").addEventListener("click", async () => {
       });
     }
     logAdminAction(EDITING_ACCOUNT ? "update_account" : "create_account", { email, role });
+    invalidateAdminCache(); // 계정 변경 → 캐시 무효화
     closeAccountModal();
     await loadAllData();
     renderTab("accounts");
@@ -1051,7 +1126,14 @@ function renderLogs() {
   if (!isMaster()) return `<div class="alert alert-err on">master 권한이 필요합니다.</div>`;
   
   return `
-    <div class="page-hdr"><div class="page-title">📋 검색 로그 <small>(최근 100건)</small></div></div>
+    <div class="page-hdr">
+      <div class="page-title">📋 검색 로그 <small>(최근 100건)</small></div>
+      <div style="margin-left:auto;">
+        <button class="btn btn-warn" onclick="clearLogCollection('search_logs', '검색 로그')" style="background:#fef3c7;color:#92400e;">
+          🗑️ 검색 로그 전체 삭제
+        </button>
+      </div>
+    </div>
     
     <div class="tbl-wrap">
       <table class="dtbl">
@@ -1076,13 +1158,99 @@ function renderLogs() {
 }
 
 // =========================================
+// 로그 컬렉션 일괄 삭제 (배치 처리)
+// =========================================
+async function clearLogCollection(collectionName, displayName) {
+  if (!isMaster()) {
+    alert("master 권한이 필요합니다.");
+    return;
+  }
+  
+  // 1차 확인
+  if (!confirm(`${displayName} 전체를 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.`)) {
+    return;
+  }
+  
+  // 2차 확인 (안전)
+  const confirmText = prompt(`정말 삭제하시려면 "삭제"를 입력하세요:`);
+  if (confirmText !== "삭제") {
+    alert("취소되었습니다.");
+    return;
+  }
+  
+  try {
+    const BATCH_SIZE = 500;
+    let totalDeleted = 0;
+    
+    // 진행 알림
+    const statusDiv = document.createElement("div");
+    statusDiv.style.cssText = "position:fixed;top:20px;right:20px;background:#1e293b;color:#fff;padding:16px 24px;border-radius:8px;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.3);";
+    statusDiv.textContent = `🗑️ ${displayName} 삭제 중...`;
+    document.body.appendChild(statusDiv);
+    
+    while (true) {
+      const snapshot = await db.collection(collectionName).limit(BATCH_SIZE).get();
+      if (snapshot.empty) break;
+      
+      // 배치로 일괄 삭제
+      const batch = db.batch();
+      snapshot.docs.forEach(doc => batch.delete(doc.ref));
+      await batch.commit();
+      
+      totalDeleted += snapshot.size;
+      statusDiv.textContent = `🗑️ ${displayName} 삭제 중... (${totalDeleted}개 완료)`;
+      
+      if (snapshot.size < BATCH_SIZE) break;
+    }
+    
+    // 로그 기록 (어떤 로그를 지웠는지 기록)
+    if (collectionName !== "admin_action_logs") {
+      try {
+        await db.collection("admin_action_logs").add({
+          action: "clear_logs",
+          target: collectionName,
+          count: totalDeleted,
+          timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+          user: CURRENT_USER.email
+        });
+      } catch (e) {}
+    }
+    
+    statusDiv.textContent = `✅ ${displayName} ${totalDeleted}개 삭제 완료!`;
+    statusDiv.style.background = "#15803d";
+    
+    invalidateAdminCache(); // 캐시 무효화
+    
+    setTimeout(() => {
+      statusDiv.remove();
+      // 메모리 데이터도 비우기
+      if (collectionName === "search_logs") DATA_LOGS = [];
+      if (collectionName === "admin_action_logs") DATA_ADMIN_LOGS = [];
+      // 현재 탭 다시 렌더링
+      renderTab(CURRENT_TAB);
+    }, 2000);
+    
+  } catch (e) {
+    console.error("로그 삭제 실패:", e);
+    alert(`삭제 실패: ${e.message}`);
+  }
+}
+
+// =========================================
 // 관리자 로그
 // =========================================
 function renderAdminLogs() {
   if (!isMaster()) return `<div class="alert alert-err on">master 권한이 필요합니다.</div>`;
   
   return `
-    <div class="page-hdr"><div class="page-title">📜 관리자 로그 <small>(최근 100건)</small></div></div>
+    <div class="page-hdr">
+      <div class="page-title">📜 관리자 로그 <small>(최근 100건)</small></div>
+      <div style="margin-left:auto;">
+        <button class="btn btn-warn" onclick="clearLogCollection('admin_action_logs', '관리자 로그')" style="background:#fef3c7;color:#92400e;">
+          🗑️ 관리자 로그 전체 삭제
+        </button>
+      </div>
+    </div>
     
     <div class="tbl-wrap">
       <table class="dtbl">
