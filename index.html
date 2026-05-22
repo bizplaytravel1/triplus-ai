@@ -178,7 +178,7 @@ header { background: var(--surface); border-bottom: 1px solid var(--border); pad
 // ⚠️ triplus-ai-821a7 프로젝트 firebaseConfig
 // 만약 apiKey가 차단/변경됐으면 GitHub에서 본인 값으로 교체!
 const firebaseConfig = {
-  apiKey: "AIzaSyB7iRmGK1tZnhncEH7sjaydZ8zHElqNpww",
+  apiKey: "AIzaSyDsIgOwLurG64hmWgmksdrWyfxrsCIK_hA",
   authDomain: "triplus-ai-821a7.firebaseapp.com",
   projectId: "triplus-ai-821a7",
   storageBucket: "triplus-ai-821a7.firebasestorage.app",
@@ -355,36 +355,49 @@ async function init() {
     }
     
     // 2. 자료 로드 - 캐시 우선 사용 (Firebase reads 최소화)
-    const CACHE_KEY = "triplus_chunks_cache";
+    // 메타데이터와 임베딩을 분리 저장하여 localStorage 용량 문제 해결
+    const META_CACHE_KEY = "triplus_chunks_meta";        // 가벼움 (수백 KB)
+    const EMB_CACHE_KEY = "triplus_chunks_emb";          // 무거움 (수 MB)
     const CACHE_TIME_KEY = "triplus_chunks_cache_time";
     const CACHE_COUNT_KEY = "triplus_chunks_count";
-    const CACHE_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7일 (대폭 연장)
-    const CHECK_INTERVAL = 12 * 60 * 60 * 1000; // 백그라운드 체크 12시간마다만
+    const CACHE_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7일
+    const CHECK_INTERVAL = 12 * 60 * 60 * 1000; // 12시간
     
     // 강제 새로고침 체크 (?refresh=1)
     const urlParams = new URLSearchParams(window.location.search);
     const forceRefresh = urlParams.get('refresh') === '1';
     
-    const cached = localStorage.getItem(CACHE_KEY);
+    const cachedMeta = localStorage.getItem(META_CACHE_KEY);
     const cacheTime = parseInt(localStorage.getItem(CACHE_TIME_KEY) || "0");
     const cacheAge = Date.now() - cacheTime;
-    const isValid = !forceRefresh && cached && cacheAge < CACHE_MAX_AGE;
+    const isValid = !forceRefresh && cachedMeta && cacheAge < CACHE_MAX_AGE;
     
     if (isValid) {
       try {
-        const data = JSON.parse(cached);
-        CHUNKS = data.chunks;
-        EMBEDDINGS = data.embeddings || {};
+        // 메타데이터 먼저 로드 (빠름!)
+        CHUNKS = JSON.parse(cachedMeta);
+        
+        // 임베딩은 별도로 로드 시도 (실패해도 메타로 검색 가능)
+        try {
+          const cachedEmb = localStorage.getItem(EMB_CACHE_KEY);
+          if (cachedEmb) {
+            EMBEDDINGS = JSON.parse(cachedEmb);
+          } else {
+            EMBEDDINGS = {};
+          }
+        } catch (e) {
+          EMBEDDINGS = {};
+          console.warn("임베딩 캐시 로드 실패 (키워드 검색 모드):", e);
+        }
+        
         HAS_EMBEDDINGS = Object.keys(EMBEDDINGS).length > 0;
         const ageHours = Math.round(cacheAge / 1000 / 60 / 60);
         console.log(`✓ 캐시 사용: ${CHUNKS.length}개 청크 (Firebase reads 0, ${ageHours}시간 전)`);
         setStatus(`✓ 준비 완료 (${CHUNKS.length}개, 캐시)`, "ok");
         
-        // 백그라운드 변경 감지: 12시간마다만 (reads 절약)
+        // 백그라운드 변경 감지 (12시간 후만)
         if (cacheAge > CHECK_INTERVAL) {
           setTimeout(() => checkForUpdates(CHUNKS.length), 2000);
-        } else {
-          console.log(`✓ 변경 감지 스킵 (다음 체크: ${Math.round((CHECK_INTERVAL - cacheAge) / 1000 / 60 / 60)}시간 후)`);
         }
         return;
       } catch (e) {
@@ -393,46 +406,89 @@ async function init() {
     }
     
     // 3. Firestore에서 청크 로드 (캐시 없거나 만료)
-    setStatus("자료 로드 중...", "warn");
+    setStatus("자료 로드 중... (0%)", "warn");
+    showLoadingMessage("자료 다운로드 중...");
+    
     const snap = await db.collection("chunks").get();
+    const totalDocs = snap.docs.length;
+    
+    setStatus(`자료 처리 중... (0/${totalDocs})`, "warn");
+    showLoadingMessage(`자료 처리 중... (0/${totalDocs})`);
     
     CHUNKS = [];
     EMBEDDINGS = {};
-    snap.forEach(doc => {
-      const d = doc.data();
-      CHUNKS.push({
-        id: doc.id,
-        source: d.source || "",
-        category: d.category || "",
-        title: d.title || "",
-        content: d.content || "",
-        search_text: d.search_text || ""
+    
+    // 청크 단위로 처리 (UI 블로킹 방지)
+    const BATCH_SIZE = 200;
+    for (let i = 0; i < snap.docs.length; i += BATCH_SIZE) {
+      const batch = snap.docs.slice(i, i + BATCH_SIZE);
+      batch.forEach(doc => {
+        const d = doc.data();
+        CHUNKS.push({
+          id: doc.id,
+          source: d.source || "",
+          category: d.category || "",
+          title: d.title || "",
+          content: d.content || "",
+          search_text: d.search_text || ""
+        });
+        if (d.embedding && Array.isArray(d.embedding)) {
+          EMBEDDINGS[doc.id] = d.embedding;
+        }
       });
-      if (d.embedding && Array.isArray(d.embedding)) {
-        EMBEDDINGS[doc.id] = d.embedding;
+      
+      const progress = Math.min(i + BATCH_SIZE, totalDocs);
+      const percent = Math.round((progress / totalDocs) * 100);
+      setStatus(`자료 처리 중... (${progress}/${totalDocs}, ${percent}%)`, "warn");
+      showLoadingMessage(`자료 처리 중... (${progress}/${totalDocs})`);
+      
+      // UI 갱신 대기 (블로킹 방지)
+      if (i + BATCH_SIZE < snap.docs.length) {
+        await new Promise(r => setTimeout(r, 0));
       }
-    });
+    }
     
     HAS_EMBEDDINGS = Object.keys(EMBEDDINGS).length > 0;
     
-    // 4. 캐시 저장
+    // 4. 캐시 저장 (메타데이터 + 임베딩 분리)
+    setStatus("캐시 저장 중...", "warn");
+    showLoadingMessage("캐시 저장 중...");
+    
+    // 4-1. 메타데이터 저장 (가벼움, 거의 항상 성공)
+    let metaSaved = false;
     try {
-      localStorage.setItem(CACHE_KEY, JSON.stringify({
-        chunks: CHUNKS,
-        embeddings: EMBEDDINGS
-      }));
+      localStorage.setItem(META_CACHE_KEY, JSON.stringify(CHUNKS));
       localStorage.setItem(CACHE_TIME_KEY, String(Date.now()));
       localStorage.setItem(CACHE_COUNT_KEY, String(CHUNKS.length));
-      console.log(`✓ 캐시 저장: ${CHUNKS.length}개 (다음 24시간 동안 Firebase reads 0)`);
+      metaSaved = true;
+      console.log(`✓ 메타데이터 캐시 저장 (${CHUNKS.length}개)`);
     } catch (e) {
-      console.warn("캐시 저장 실패 (용량 부족 가능):", e);
+      console.error("❌ 메타데이터 캐시 저장 실패:", e.message);
     }
     
+    // 4-2. 임베딩 저장 (무거움, 용량 초과 가능)
+    if (HAS_EMBEDDINGS) {
+      try {
+        localStorage.setItem(EMB_CACHE_KEY, JSON.stringify(EMBEDDINGS));
+        console.log(`✓ 임베딩 캐시 저장 (${Object.keys(EMBEDDINGS).length}개)`);
+      } catch (e) {
+        console.warn(`⚠ 임베딩 캐시 저장 실패 (용량 초과). 키워드 검색은 정상 작동:`, e.message);
+        // 임베딩 저장 실패해도 검색은 가능 (메모리에는 있음)
+        // 다음 방문 시는 임베딩 없이 키워드 검색만 가능
+      }
+    }
+    
+    if (metaSaved) {
+      console.log(`✓ 다음 7일 동안 Firebase reads 0`);
+    }
+    
+    hideLoadingMessage();
     setStatus(`✓ 준비 완료 (${CHUNKS.length}개)`, "ok");
     console.log(`✅ ${CHUNKS.length}개 청크, ${Object.keys(EMBEDDINGS).length}개 임베딩 로드됨`);
     
   } catch (e) {
     console.error(e);
+    hideLoadingMessage();
     setStatus("연결 실패", "err");
     showError(`초기화 실패: ${e.message}<br>잠시 후 새로고침 해보세요.`);
   }
@@ -442,6 +498,42 @@ function setStatus(text, type) {
   const el = document.getElementById("statusBadge");
   el.textContent = text;
   el.className = "status-badge status-" + type;
+}
+
+// 로딩 메시지 표시 (화면 중앙)
+function showLoadingMessage(text) {
+  let loader = document.getElementById("initLoader");
+  if (!loader) {
+    loader = document.createElement("div");
+    loader.id = "initLoader";
+    loader.style.cssText = "position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:24px 32px;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.15);z-index:9999;text-align:center;font-family:'Noto Sans KR',sans-serif;min-width:280px;border:1px solid #e2e8f0;";
+    loader.innerHTML = `
+      <div style="margin-bottom:12px;">
+        <div style="width:40px;height:40px;border:3px solid #e2e8f0;border-top-color:#3b82f6;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto;"></div>
+      </div>
+      <div id="initLoaderText" style="color:#1e293b;font-size:14px;font-weight:500;">자료 로드 중...</div>
+      <div style="color:#64748b;font-size:12px;margin-top:8px;">처음 접속 시 시간이 걸릴 수 있습니다</div>
+    `;
+    document.body.appendChild(loader);
+    // 스피너 애니메이션 CSS 추가
+    if (!document.getElementById("spinKeyframes")) {
+      const style = document.createElement("style");
+      style.id = "spinKeyframes";
+      style.textContent = "@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }";
+      document.head.appendChild(style);
+    }
+  }
+  const textEl = document.getElementById("initLoaderText");
+  if (textEl) textEl.textContent = text;
+}
+
+function hideLoadingMessage() {
+  const loader = document.getElementById("initLoader");
+  if (loader) {
+    loader.style.opacity = "0";
+    loader.style.transition = "opacity 0.3s";
+    setTimeout(() => loader.remove(), 300);
+  }
 }
 
 // ====================================================
