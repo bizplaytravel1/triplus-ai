@@ -178,7 +178,7 @@ header { background: var(--surface); border-bottom: 1px solid var(--border); pad
 // ⚠️ triplus-ai-821a7 프로젝트 firebaseConfig
 // 만약 apiKey가 차단/변경됐으면 GitHub에서 본인 값으로 교체!
 const firebaseConfig = {
-  apiKey: "AIzaSyB7iRmGK1tZnhncEH7sjaydZ8zHElqNpww",
+  apiKey: "AIzaSyDsIgOwLurG64hmWgmksdrWyfxrsCIK_hA",
   authDomain: "triplus-ai-821a7.firebaseapp.com",
   projectId: "triplus-ai-821a7",
   storageBucket: "triplus-ai-821a7.firebasestorage.app",
@@ -188,6 +188,13 @@ const firebaseConfig = {
 
 // 시스템 프롬프트 (압축 스타일 - 한눈에 보이는 핵심 답변)
 const SYSTEM_PROMPT = `당신은 현대자동차 트리플러스(TRIP+) 출장관리 Q&A 도우미입니다. 제공된 자료만 근거로 답변하며, 없는 내용은 추측하지 마세요.
+
+⚠️ 언어 규칙 (절대 준수):
+- 반드시 한국어로만 답변
+- 일본어, 영어, 중국어 등 다른 언어 단어 절대 사용 금지
+- "ただし", "however", "but" 등 외국어 연결어 사용 금지
+- 한국어 표현으로만: "다만", "하지만", "단", "그러나" 등 사용
+- 한국어 표현으로만: "또한", "그리고", "또", "추가로" 등 사용
 
 답변 형식 (반드시 준수):
 
@@ -204,6 +211,7 @@ const SYSTEM_PROMPT = `당신은 현대자동차 트리플러스(TRIP+) 출장�
 - 인사말, 사과, "도움이 되셨길 바랍니다" 류 절대 금지
 - 자료에 없는 내용 추측 금지 → "자료에 명시 없음" 표기
 - 긴 문단 금지 → 짧은 문장으로 끊기
+- 한국어 외 다른 언어 단어 사용 금지
 
 업무 외 질문 (잡담, 창작 등):
 "현대자동차 트리플러스(TRIP+) 출장관리 Q&A 도우미입니다. 출장 규정, 정산 방법, 시스템 사용법을 안내해드립니다." 한 문장만 답변.
@@ -700,7 +708,7 @@ ${c.title}
 ${content}`;
   }).join("\n---\n");
   
-  const userMsg = `[참고 자료]\n${context}\n\n[질문]\n${query}\n\n위 자료만 근거로 간결히 답변.`;
+  const userMsg = `[참고 자료]\n${context}\n\n[질문]\n${query}\n\n위 자료만 근거로 간결히 답변. 반드시 한국어로만 답변하고 일본어/영어 등 다른 언어 단어 사용 금지.`;
   
   // ★ Groq 사용 (Gemini 폴백 없음 - quota 부담 X)
   if (!GROQ_KEY) {
