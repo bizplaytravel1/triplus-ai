@@ -178,7 +178,7 @@ header { background: var(--surface); border-bottom: 1px solid var(--border); pad
 // ⚠️ triplus-ai-821a7 프로젝트 firebaseConfig
 // 만약 apiKey가 차단/변경됐으면 GitHub에서 본인 값으로 교체!
 const firebaseConfig = {
-  apiKey: "AIzaSyB7iRmGK1tZnhncEH7sjaydZ8zHElqNpww",
+  apiKey: "AIzaSyDsIgOwLurG64hmWgmksdrWyfxrsCIK_hA",
   authDomain: "triplus-ai-821a7.firebaseapp.com",
   projectId: "triplus-ai-821a7",
   storageBucket: "triplus-ai-821a7.firebasestorage.app",
@@ -1008,7 +1008,13 @@ async function generateAnswer(query, topChunks) {
       // 24시간 이내 캐시면 사용
       if (Date.now() - obj.ts < 24 * 60 * 60 * 1000) {
         console.log("✓ 캐시된 답변 사용 (quota 절약)");
-        return obj.answer + "\n\n*(이전 답변 캐시 사용 · API 호출 0회)*";
+        // ★ 옛 버전 캐시에 raw HTML 태그가 남아있을 수 있으므로 postProcessKorean 한 번 더 적용
+        const cleaned = postProcessKorean(obj.answer);
+        // 정리된 결과가 원본과 다르면 캐시 업데이트 (다음 번부터는 정리된 채로 빠르게 반환)
+        if (cleaned !== obj.answer) {
+          cacheAnswer(cacheKey, cleaned);
+        }
+        return cleaned + "\n\n*(이전 답변 캐시 사용 · API 호출 0회)*";
       }
     }
   } catch (e) { /* 캐시 실패는 무시 */ }
@@ -1133,8 +1139,12 @@ function postProcessKorean(text) {
   result = result.replace(/<br\s*\/?>/gi, '\n');
   result = result.replace(/<\/?p[^>]*>/gi, '\n');
 
-  // 남은 HTML 태그 모두 제거 (안전)
-  result = result.replace(/<\/?(?:div|span|tr|td|th|thead|tbody|tfoot|table|ul|ol|li|p|br|h[1-6])[^>]*>/gi, '');
+  // ★★★ 최종 안전망: 위 변환에서 놓친 어떤 HTML 태그라도 강제 제거
+  // - 닫는 태그 누락, 비정상 중첩, 알 수 없는 태그명까지 모두 정리
+  // - <foo>, </foo>, <foo attr="x">, <foo/>, <foo /> 모든 형태 매칭
+  result = result.replace(/<\/?[a-zA-Z][a-zA-Z0-9]*(?:\s[^<>]*?)?\/?>/g, '');
+  // HTML 엔티티가 raw로 남아있는 경우도 정리 (LLM이 가끔 &lt;ul&gt; 형태로 출력)
+  result = result.replace(/&lt;\/?[a-zA-Z][a-zA-Z0-9]*(?:\s[^&]*?)?&gt;/g, '');
   
   // 일본어 → 한국어 변환
   const jpReplacements = [
@@ -1200,6 +1210,20 @@ function cacheAnswer(cacheKey, answer) {
   } catch (e) { /* 캐시 저장 실패 무시 */ }
 }
 
+// 콘솔에서 옛 답변 캐시 일괄 삭제용 헬퍼 (F12에서 clearAnswerCache() 실행)
+window.clearAnswerCache = function() {
+  let n = 0;
+  for (let i = localStorage.length - 1; i >= 0; i--) {
+    const k = localStorage.key(i);
+    if (k && k.startsWith("ans_")) {
+      localStorage.removeItem(k);
+      n++;
+    }
+  }
+  console.log(`✅ 답변 캐시 ${n}개 삭제 완료. 페이지를 새로고침하세요.`);
+  return n;
+};
+
 // 간단한 문자열 해시 (캐시 키용)
 function simpleHash(str) {
   let hash = 0;
@@ -1214,6 +1238,11 @@ function simpleHash(str) {
 // Markdown 렌더링
 // ====================================================
 function renderMarkdown(md) {
+  // ★ 렌더링 직전 최종 sanitize: postProcessKorean이 어떤 경로로든 누락된 경우의 마지막 방어선
+  // - LLM이 출력했을 가능성이 있는 모든 raw HTML 태그를 markdown으로 변환하거나 제거
+  if (md && /<[a-zA-Z]/.test(md)) {
+    md = postProcessKorean(md);
+  }
   let html = md;
   // 표
   html = html.replace(/(\|[^\n]+\|\n\|[\s\-:|]+\|\n(?:\|[^\n]+\|\n?)+)/g, (table) => {
