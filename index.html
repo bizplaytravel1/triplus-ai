@@ -178,7 +178,7 @@ header { background: var(--surface); border-bottom: 1px solid var(--border); pad
 // ⚠️ triplus-ai-821a7 프로젝트 firebaseConfig
 // 만약 apiKey가 차단/변경됐으면 GitHub에서 본인 값으로 교체!
 const firebaseConfig = {
-  apiKey: "AIzaSyB7iRmGK1tZnhncEH7sjaydZ8zHElqNpww",
+  apiKey: "AIzaSyDsIgOwLurG64hmWgmksdrWyfxrsCIK_hA",
   authDomain: "triplus-ai-821a7.firebaseapp.com",
   projectId: "triplus-ai-821a7",
   storageBucket: "triplus-ai-821a7.firebasestorage.app",
@@ -198,6 +198,16 @@ const SYSTEM_PROMPT = `당신은 현대자동차 트리플러스(TRIP+) 출장�
 - 표는 반드시 markdown 형식만 사용: | 컬럼1 | 컬럼2 | 형태
 - 목록은 반드시 markdown 형식만 사용: - 항목 또는 1. 항목
 - 마크다운 헤더(##, ###) 사용 금지 → **굵은 글씨**로 섹션 제목 표현
+
+🚫 절대 금지 - HTML 태그 출력 (가장 중요):
+- 어떤 경우에도 다음 태그 출력 금지: <ul>, <li>, <ol>, <table>, <thead>, <tbody>, <tr>, <td>, <th>, <strong>, <b>, <em>, <i>, <p>, <br>, <div>, <span>, <h1>~<h6>
+- 섹션 헤더는 반드시 markdown으로 굵게 처리:
+  - 잘못된 예: 지원 기준\\n<ul><li>...</li></ul>
+  - 올바른 예: **지원 기준**\\n- ...
+- 표는 반드시 markdown 파이프(|) 형식:
+  - 잘못된 예: <table><tr><th>구분</th>...</tr></table>
+  - 올바른 예: | 구분 | 값 |\\n| --- | --- |\\n| ... | ... |
+- 모든 답변은 100% markdown만 사용. HTML 한 태그라도 섞이면 화면이 깨짐.
 
 🚫 절대 금지 - 조항 번호 인용:
 - "제○조", "제○장", "○항", "○호" 등 조항/장/항/호 번호 인용 절대 금지
@@ -656,22 +666,46 @@ let _lastAnswer = "";
 
 function copyAnswer() {
   if (!_lastAnswer) return;
-  
+
   const copyBtn = document.getElementById("copyBtn");
   const copyText = document.getElementById("copyBtnText");
   const copyIcon = document.getElementById("copyBtnIcon");
-  
-  // 클립보드 API 사용
+
+  // 1) HTML 버전: 화면에 그려진 답변 그대로 (Word/Slack/Notion 등 리치 텍스트 환경에서 서식 유지)
+  const aiContent = document.getElementById("aiContent");
+  // 복사용으로 깔끔하게 wrap (인라인 스타일 약간 부여 → 외부 앱 호환성↑)
+  const wrappedHtml = `<div style="font-family:'Malgun Gothic','Noto Sans KR',sans-serif;font-size:14px;line-height:1.7;color:#1a1f36;">${aiContent.innerHTML}</div>`;
+
+  // 2) Plain text 버전: markdown 기호 제거된 깔끔한 텍스트 (메모장 등 plain text 환경용)
+  const plainText = markdownToPlainText(_lastAnswer);
+
+  // ClipboardItem 지원 시 → HTML + plain text 둘 다 동시에 클립보드에
+  if (navigator.clipboard && navigator.clipboard.write && window.ClipboardItem) {
+    try {
+      const item = new ClipboardItem({
+        "text/html": new Blob([wrappedHtml], { type: "text/html" }),
+        "text/plain": new Blob([plainText], { type: "text/plain" })
+      });
+      navigator.clipboard.write([item]).then(showCopySuccess).catch(() => {
+        // 폴백 1: writeText로 plain text만
+        navigator.clipboard.writeText(plainText).then(showCopySuccess).catch(() => {
+          fallbackCopyRich(wrappedHtml, plainText);
+        });
+      });
+      return;
+    } catch (_e) {
+      // ClipboardItem 생성 실패 → 폴백
+    }
+  }
+
   if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(_lastAnswer).then(() => {
-      showCopySuccess();
-    }).catch(() => {
-      fallbackCopy(_lastAnswer);
+    navigator.clipboard.writeText(plainText).then(showCopySuccess).catch(() => {
+      fallbackCopyRich(wrappedHtml, plainText);
     });
   } else {
-    fallbackCopy(_lastAnswer);
+    fallbackCopyRich(wrappedHtml, plainText);
   }
-  
+
   function showCopySuccess() {
     copyBtn.classList.add("copied");
     copyIcon.textContent = "✓";
@@ -682,22 +716,92 @@ function copyAnswer() {
       copyText.textContent = "복사";
     }, 2000);
   }
-  
-  function fallbackCopy(text) {
-    const textarea = document.createElement("textarea");
-    textarea.value = text;
-    textarea.style.position = "fixed";
-    textarea.style.top = "-9999px";
-    document.body.appendChild(textarea);
-    textarea.select();
+
+  // 구형 브라우저 폴백: contenteditable div를 선택하면 brower가 자동으로 HTML도 클립보드에 넣음
+  function fallbackCopyRich(html, text) {
+    const div = document.createElement("div");
+    div.contentEditable = "true";
+    div.innerHTML = html;
+    div.style.position = "fixed";
+    div.style.top = "-9999px";
+    div.style.opacity = "0";
+    document.body.appendChild(div);
+    const range = document.createRange();
+    range.selectNodeContents(div);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
     try {
       document.execCommand("copy");
       showCopySuccess();
-    } catch (e) {
-      alert("복사 실패. 직접 선택해서 복사해주세요.");
+    } catch (_e) {
+      // 최종 폴백: 텍스트만
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.top = "-9999px";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+        showCopySuccess();
+      } catch (_e2) {
+        alert("복사 실패. 직접 선택해서 복사해주세요.");
+      }
     }
-    document.body.removeChild(textarea);
+    sel.removeAllRanges();
+    document.body.removeChild(div);
   }
+}
+
+// Markdown → Plain text (복사용: 메모장 등 plain text 환경에서 깔끔하게 보이도록)
+function markdownToPlainText(md) {
+  if (!md) return "";
+  let text = md;
+
+  // 1) markdown 표 → 정렬된 텍스트 표
+  text = text.replace(/(\|[^\n]+\|\n\|[\s\-:|]+\|\n(?:\|[^\n]+\|\n?)+)/g, (table) => {
+    const lines = table.trim().split("\n");
+    const dataLines = [lines[0], ...lines.slice(2)];
+    const rows = dataLines.map(line => {
+      const cells = line.split("|");
+      // 좌우 빈 셀 제거
+      if (cells.length > 0 && !cells[0].trim()) cells.shift();
+      if (cells.length > 0 && !cells[cells.length - 1].trim()) cells.pop();
+      // 셀 내 markdown bold 등 정리
+      return cells.map(c => c.replace(/\*\*(.+?)\*\*/g, "$1").replace(/\*(.+?)\*/g, "$1").trim());
+    });
+    // 각 컬럼의 최대 너비 (한글 가독성 위해 [...]로 char 단위)
+    const widths = [];
+    rows.forEach(r => r.forEach((c, i) => {
+      widths[i] = Math.max(widths[i] || 0, [...c].length);
+    }));
+    const formatted = rows.map(r =>
+      r.map((c, i) => c + " ".repeat(Math.max(0, widths[i] - [...c].length))).join("  │  ")
+    );
+    // 헤더 아래 구분선
+    const sep = widths.map(w => "─".repeat(w)).join("──┼──");
+    return "\n" + formatted[0] + "\n" + sep + "\n" + formatted.slice(1).join("\n") + "\n";
+  });
+
+  // 2) 헤더 (##, ###) 제거
+  text = text.replace(/^#{1,6}\s+/gm, "");
+
+  // 3) 굵은 글씨 / 이탤릭 마크다운 제거
+  text = text.replace(/\*\*(.+?)\*\*/g, "$1");
+  text = text.replace(/(?<!\*)\*([^*\n]+?)\*(?!\*)/g, "$1");
+
+  // 4) 인라인 코드 제거
+  text = text.replace(/`([^`]+)`/g, "$1");
+
+  // 5) 링크 [텍스트](url) → 텍스트
+  text = text.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1");
+
+  // 6) 여러 줄바꿈 정리
+  text = text.replace(/\n{3,}/g, "\n\n");
+
+  return text.trim();
 }
 
 function setQ(q) {
@@ -962,7 +1066,28 @@ async function callGroq(userMsg) {
 function postProcessKorean(text) {
   if (!text) return text;
   let result = text;
-  
+
+  // ★★ 0단계 — LLM이 섹션 헤더를 평문으로 쓰고 곧바로 <ul>/<table>을 붙이는 케이스 보정
+  // 예: "지원 기준<ul>..." → "**지원 기준**\n<ul>..."
+  // 예: "복귀 시점별 정산 범위 비교<table>..." → "**복귀 시점별 정산 범위 비교**\n<table>..."
+  // 짧은 한글 헤더 텍스트(공백 포함 최대 30자)가 <ul>/<ol>/<table> 직전에 붙어있는 경우만
+  // [^\n*><] : 시작은 개행/별표/꺾쇠 제외 (이전 태그의 </ul> 같은 게 헤더로 잡히지 않도록)
+  result = result.replace(/([^\n*><][^\n<>]{0,29}?)(<(?:ul|ol|table)[^>]*>)/gi, (m, header, tag) => {
+    const trimmed = header.trim();
+    if (!trimmed) return m;
+    // 이미 markdown bold면 건드리지 않음
+    if (/^\*\*.+\*\*$/.test(trimmed)) return m;
+    // 헤더에 HTML 태그 부스러기가 남았다면 건드리지 않음 (안전망)
+    if (/[<>]/.test(trimmed)) return m;
+    return `\n\n**${trimmed}**\n\n${tag}`;
+  });
+
+  // ★ 강조 태그를 먼저 markdown으로 변환 (표/리스트 안의 굵은 글씨 보존을 위해 우선 처리)
+  result = result.replace(/<strong[^>]*>([\s\S]*?)<\/strong>/gi, '**$1**');
+  result = result.replace(/<b[^>]*>([\s\S]*?)<\/b>/gi, '**$1**');
+  result = result.replace(/<em[^>]*>([\s\S]*?)<\/em>/gi, '*$1*');
+  result = result.replace(/<i[^>]*>([\s\S]*?)<\/i>/gi, '*$1*');
+
   // ★ HTML 태그 → markdown 자동 변환 (LLM이 HTML로 답변한 경우)
   // 표 변환 (<table>...<tbody>...</table> → markdown 표)
   result = result.replace(/<table[^>]*>([\s\S]*?)<\/table>/gi, (match, content) => {
@@ -1007,12 +1132,7 @@ function postProcessKorean(text) {
   // 줄바꿈 태그
   result = result.replace(/<br\s*\/?>/gi, '\n');
   result = result.replace(/<\/?p[^>]*>/gi, '\n');
-  
-  // 강조 태그
-  result = result.replace(/<strong[^>]*>([\s\S]*?)<\/strong>/gi, '**$1**');
-  result = result.replace(/<b[^>]*>([\s\S]*?)<\/b>/gi, '**$1**');
-  result = result.replace(/<em[^>]*>([\s\S]*?)<\/em>/gi, '*$1*');
-  
+
   // 남은 HTML 태그 모두 제거 (안전)
   result = result.replace(/<\/?(?:div|span|tr|td|th|thead|tbody|tfoot|table|ul|ol|li|p|br|h[1-6])[^>]*>/gi, '');
   
