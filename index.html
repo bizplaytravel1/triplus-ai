@@ -178,7 +178,7 @@ header { background: var(--surface); border-bottom: 1px solid var(--border); pad
 // ⚠️ triplus-ai-821a7 프로젝트 firebaseConfig
 // 만약 apiKey가 차단/변경됐으면 GitHub에서 본인 값으로 교체!
 const firebaseConfig = {
-  apiKey: "AIzaSyB7iRmGK1tZnhncEH7sjaydZ8zHElqNpww",
+  apiKey: "AIzaSyDsIgOwLurG64hmWgmksdrWyfxrsCIK_hA",
   authDomain: "triplus-ai-821a7.firebaseapp.com",
   projectId: "triplus-ai-821a7",
   storageBucket: "triplus-ai-821a7.firebasestorage.app",
@@ -498,15 +498,8 @@ async function init() {
     
     // 4-1. 메타데이터 저장 (가벼움, 거의 항상 성공)
     let metaSaved = false;
-    try {
-      localStorage.setItem(META_CACHE_KEY, JSON.stringify(CHUNKS));
-      localStorage.setItem(CACHE_TIME_KEY, String(Date.now()));
-      localStorage.setItem(CACHE_COUNT_KEY, String(CHUNKS.length));
-      metaSaved = true;
-      console.log(`✓ 메타데이터 캐시 저장 (${CHUNKS.length}개)`);
-    } catch (e) {
-      console.error("❌ 메타데이터 캐시 저장 실패:", e.message);
-    }
+    const metaJson = JSON.stringify(CHUNKS);
+    metaSaved = trySaveMetaCache(metaJson, META_CACHE_KEY, CACHE_TIME_KEY, CACHE_COUNT_KEY, CHUNKS.length);
     
     // 4-2. 임베딩 저장 (무거움, 용량 초과 가능)
     if (HAS_EMBEDDINGS) {
@@ -1207,21 +1200,142 @@ function postProcessKorean(text) {
 function cacheAnswer(cacheKey, answer) {
   try {
     localStorage.setItem(cacheKey, JSON.stringify({ answer, ts: Date.now() }));
-  } catch (e) { /* 캐시 저장 실패 무시 */ }
-}
-
-// 콘솔에서 옛 답변 캐시 일괄 삭제용 헬퍼 (F12에서 clearAnswerCache() 실행)
-window.clearAnswerCache = function() {
-  let n = 0;
-  for (let i = localStorage.length - 1; i >= 0; i--) {
-    const k = localStorage.key(i);
-    if (k && k.startsWith("ans_")) {
-      localStorage.removeItem(k);
-      n++;
+  } catch (e) {
+    // quota 초과 → 옛 답변 캐시 절반 정리 후 재시도
+    if (e && (e.name === "QuotaExceededError" || /quota/i.test(e.message || ""))) {
+      const cleared = cleanupOldAnswerCache(0.5);
+      console.warn(`⚠ 답변 캐시 quota 초과 → 옛 답변 ${cleared}개 정리 후 재시도`);
+      try {
+        localStorage.setItem(cacheKey, JSON.stringify({ answer, ts: Date.now() }));
+      } catch (e2) {
+        console.warn("답변 캐시 저장 포기 (메모리에만 유지):", e2.message);
+      }
     }
   }
+}
+
+// 메타데이터 캐시 저장 시도 — 실패 시 단계적으로 옛 캐시 정리 후 재시도
+function trySaveMetaCache(metaJson, metaKey, timeKey, countKey, chunkCount) {
+  const setAll = () => {
+    localStorage.setItem(metaKey, metaJson);
+    localStorage.setItem(timeKey, String(Date.now()));
+    localStorage.setItem(countKey, String(chunkCount));
+  };
+  // 시도 1: 그대로 저장
+  try {
+    setAll();
+    console.log(`✓ 메타데이터 캐시 저장 (${chunkCount}개)`);
+    return true;
+  } catch (e) {
+    if (!isQuotaError(e)) {
+      console.error("❌ 메타데이터 캐시 저장 실패 (quota 외):", e.message);
+      return false;
+    }
+  }
+  // 시도 2: 답변 캐시 전부 정리 후 재시도
+  const ansCleared = cleanupOldAnswerCache(1.0);
+  console.warn(`⚠ 메타 캐시 quota 초과 → 답변 캐시 ${ansCleared}개 정리 후 재시도`);
+  try {
+    setAll();
+    console.log(`✓ 메타데이터 캐시 저장 (${chunkCount}개, 답변 캐시 정리 후)`);
+    return true;
+  } catch (e) {
+    if (!isQuotaError(e)) return false;
+  }
+  // 시도 3: 임베딩 캐시도 정리 후 재시도 (검색은 메모리상 임베딩으로 가능)
+  try {
+    localStorage.removeItem("triplus_chunks_emb");
+    console.warn("⚠ 임베딩 캐시도 정리 (이번 세션은 메모리 임베딩 사용)");
+    setAll();
+    console.log(`✓ 메타데이터 캐시 저장 (${chunkCount}개, 임베딩 캐시도 정리 후)`);
+    return true;
+  } catch (e) {
+    console.error("❌ 메타데이터 캐시 저장 최종 실패. 이번 세션만 작동, 다음 방문 시 다시 로드됨:", e.message);
+    return false;
+  }
+}
+
+function isQuotaError(e) {
+  return e && (e.name === "QuotaExceededError"
+            || e.name === "NS_ERROR_DOM_QUOTA_REACHED"
+            || /quota/i.test(e.message || ""));
+}
+
+// 옛 답변 캐시 정리: ratio = 1.0이면 전부, 0.5면 오래된 절반만 삭제
+function cleanupOldAnswerCache(ratio) {
+  const items = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && k.startsWith("ans_")) {
+      try {
+        const obj = JSON.parse(localStorage.getItem(k));
+        items.push({ key: k, ts: (obj && obj.ts) || 0 });
+      } catch (_e) {
+        items.push({ key: k, ts: 0 });
+      }
+    }
+  }
+  // 오래된 순으로 정렬
+  items.sort((a, b) => a.ts - b.ts);
+  const removeCount = Math.max(1, Math.floor(items.length * ratio));
+  let n = 0;
+  for (let i = 0; i < removeCount && i < items.length; i++) {
+    localStorage.removeItem(items[i].key);
+    n++;
+  }
+  return n;
+}
+
+// ─── 콘솔 헬퍼 (F12에서 실행 가능) ────────────────────────────
+// 답변 캐시만 삭제
+window.clearAnswerCache = function() {
+  const n = cleanupOldAnswerCache(1.0);
   console.log(`✅ 답변 캐시 ${n}개 삭제 완료. 페이지를 새로고침하세요.`);
   return n;
+};
+
+// 트리플러스 관련 모든 캐시 삭제 (자료/임베딩/답변 전부)
+window.clearAllCache = function() {
+  const keys = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && (k.startsWith("triplus_") || k.startsWith("ans_"))) {
+      keys.push(k);
+    }
+  }
+  keys.forEach(k => localStorage.removeItem(k));
+  console.log(`✅ 트리플러스 캐시 ${keys.length}개 삭제 완료. 페이지를 새로고침하세요.`);
+  return keys.length;
+};
+
+// 현재 캐시 용량 진단
+window.cacheUsage = function() {
+  let totalBytes = 0;
+  const buckets = { meta: 0, emb: 0, answer: 0, other: 0 };
+  const counts = { meta: 0, emb: 0, answer: 0, other: 0 };
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (!k) continue;
+    const v = localStorage.getItem(k) || "";
+    // UTF-16 기준 대략 추정: 문자 수 × 2
+    const bytes = (k.length + v.length) * 2;
+    totalBytes += bytes;
+    let bucket = "other";
+    if (k === "triplus_chunks_meta") bucket = "meta";
+    else if (k === "triplus_chunks_emb") bucket = "emb";
+    else if (k.startsWith("ans_")) bucket = "answer";
+    buckets[bucket] += bytes;
+    counts[bucket]++;
+  }
+  const fmt = (b) => (b / 1024 / 1024).toFixed(2) + " MB";
+  console.log("📊 localStorage 사용량");
+  console.log(`  메타데이터 (chunks): ${fmt(buckets.meta)} (${counts.meta}개 키)`);
+  console.log(`  임베딩 (embeddings): ${fmt(buckets.emb)} (${counts.emb}개 키)`);
+  console.log(`  답변 캐시 (ans_*):   ${fmt(buckets.answer)} (${counts.answer}개 키)`);
+  console.log(`  기타:               ${fmt(buckets.other)} (${counts.other}개 키)`);
+  console.log(`  ─────────────────────────────`);
+  console.log(`  합계:               ${fmt(totalBytes)} / 약 5MB 한도`);
+  return { totalBytes, buckets, counts };
 };
 
 // 간단한 문자열 해시 (캐시 키용)
