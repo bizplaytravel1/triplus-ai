@@ -8,6 +8,8 @@
 <!-- Firebase (compat 버전 - 간단하게 쓰기) -->
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+<!-- LZ-String 압축 (localStorage 용량 50-70% 절감) -->
+<script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
 
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
@@ -178,7 +180,7 @@ header { background: var(--surface); border-bottom: 1px solid var(--border); pad
 // ⚠️ triplus-ai-821a7 프로젝트 firebaseConfig
 // 만약 apiKey가 차단/변경됐으면 GitHub에서 본인 값으로 교체!
 const firebaseConfig = {
-  apiKey: "AIzaSyB7iRmGK1tZnhncEH7sjaydZ8zHElqNpww",
+  apiKey: "AIzaSyDsIgOwLurG64hmWgmksdrWyfxrsCIK_hA",
   authDomain: "triplus-ai-821a7.firebaseapp.com",
   projectId: "triplus-ai-821a7",
   storageBucket: "triplus-ai-821a7.firebasestorage.app",
@@ -375,7 +377,21 @@ let HAS_EMBEDDINGS = false;
 // ====================================================
 async function init() {
   setStatus("연결 중...", "warn");
-  
+
+  // ★ 마이그레이션: 옛 비압축 캐시가 quota를 차지하고 있으면 정리하여 새 압축본으로 전환
+  // 캐시된 문자열이 JSON 시작 문자(`[` / `{`)면 옛 비압축본 → 정리
+  // (압축본은 항상 LZ-String UTF-16 인코딩이라 시작 문자가 다름)
+  try {
+    const oldMeta = localStorage.getItem("triplus_chunks_meta");
+    if (oldMeta && oldMeta.length > 50000 && (oldMeta[0] === '[' || oldMeta[0] === '{')) {
+      console.log("⚙️ 옛 비압축 캐시 감지 → 정리 (다음 로드 시 압축본으로 재저장)");
+      localStorage.removeItem("triplus_chunks_meta");
+      localStorage.removeItem("triplus_chunks_emb");
+      localStorage.removeItem("triplus_chunks_cache_time");
+      localStorage.removeItem("triplus_chunks_count");
+    }
+  } catch (_e) { /* 마이그레이션 실패는 무시 */ }
+
   try {
     // 1. config에서 API 키 가져오기 (Gemini + Groq)
     const configDoc = await db.collection("config").doc("public").get();
@@ -409,7 +425,7 @@ async function init() {
     const urlParams = new URLSearchParams(window.location.search);
     const forceRefresh = urlParams.get('refresh') === '1';
     
-    const cachedMeta = localStorage.getItem(META_CACHE_KEY);
+    const cachedMeta = lzGet(META_CACHE_KEY);
     const cacheTime = parseInt(localStorage.getItem(CACHE_TIME_KEY) || "0");
     const cacheAge = Date.now() - cacheTime;
     const isValid = !forceRefresh && cachedMeta && cacheAge < CACHE_MAX_AGE;
@@ -421,7 +437,7 @@ async function init() {
         
         // 임베딩은 별도로 로드 시도 (실패해도 메타로 검색 가능)
         try {
-          const cachedEmb = localStorage.getItem(EMB_CACHE_KEY);
+          const cachedEmb = lzGet(EMB_CACHE_KEY);
           if (cachedEmb) {
             EMBEDDINGS = JSON.parse(cachedEmb);
           } else {
@@ -500,6 +516,7 @@ async function init() {
     // ★ content 필드는 캐시에서 제외 — search_text = title+content 이므로 정보 중복.
     //   검색 점수는 search_text로 매기고, LLM 컨텍스트도 search_text로 충분.
     //   메모리상 CHUNKS는 content를 그대로 유지 (이번 세션 동안만).
+    // ★ LZString으로 압축 저장 → 한글 텍스트는 보통 50-70% 추가 절감
     let metaSaved = false;
     const slimChunks = CHUNKS.map(c => ({
       id: c.id,
@@ -510,13 +527,17 @@ async function init() {
       // content는 저장하지 않음 (용량 절약)
     }));
     const metaJson = JSON.stringify(slimChunks);
-    console.log(`📦 메타 캐시 크기: ${(metaJson.length / 1024 / 1024).toFixed(2)} MB (${CHUNKS.length}개 청크, content 제외)`);
-    metaSaved = trySaveMetaCache(metaJson, META_CACHE_KEY, CACHE_TIME_KEY, CACHE_COUNT_KEY, CHUNKS.length);
-    
-    // 4-2. 임베딩 저장 (무거움, 용량 초과 가능)
+    const compressedMeta = window.LZString ? LZString.compressToUTF16(metaJson) : metaJson;
+    console.log(`📦 메타 캐시: ${(metaJson.length / 1024 / 1024).toFixed(2)} MB → 압축 후 ${(compressedMeta.length * 2 / 1024 / 1024).toFixed(2)} MB (${CHUNKS.length}개 청크)`);
+    metaSaved = trySaveMetaCache(compressedMeta, META_CACHE_KEY, CACHE_TIME_KEY, CACHE_COUNT_KEY, CHUNKS.length);
+
+    // 4-2. 임베딩 저장 (무거움, 용량 초과 가능) — LZString 압축
     if (HAS_EMBEDDINGS) {
       try {
-        localStorage.setItem(EMB_CACHE_KEY, JSON.stringify(EMBEDDINGS));
+        const embJson = JSON.stringify(EMBEDDINGS);
+        const compressedEmb = window.LZString ? LZString.compressToUTF16(embJson) : embJson;
+        console.log(`📦 임베딩 캐시: ${(embJson.length / 1024 / 1024).toFixed(2)} MB → 압축 후 ${(compressedEmb.length * 2 / 1024 / 1024).toFixed(2)} MB`);
+        localStorage.setItem(EMB_CACHE_KEY, compressedEmb);
         console.log(`✓ 임베딩 캐시 저장 (${Object.keys(EMBEDDINGS).length}개)`);
       } catch (e) {
         console.warn(`⚠ 임베딩 캐시 저장 실패 (용량 초과). 키워드 검색은 정상 작동:`, e.message);
@@ -1250,6 +1271,25 @@ function cacheAnswer(cacheKey, answer) {
         console.warn("답변 캐시 저장 포기 (메모리에만 유지):", e2.message);
       }
     }
+  }
+}
+
+// LZString 압축 캐시 로드 헬퍼 (압축/비압축 둘 다 호환)
+function lzGet(key) {
+  const raw = localStorage.getItem(key);
+  if (!raw) return null;
+  if (!window.LZString) return raw;
+  // LZString.decompressFromUTF16은 압축된 데이터면 원본 문자열, 아니면 null/빈문자열 반환
+  try {
+    const decompressed = LZString.decompressFromUTF16(raw);
+    // 압축 풀린 결과가 유효한 JSON 시작 문자(예: [, {)면 압축본
+    if (decompressed && decompressed.length > 0 && (decompressed[0] === '[' || decompressed[0] === '{')) {
+      return decompressed;
+    }
+    // 폴백: 원본이 이미 평문 JSON
+    return (raw[0] === '[' || raw[0] === '{') ? raw : null;
+  } catch (_e) {
+    return (raw && (raw[0] === '[' || raw[0] === '{')) ? raw : null;
   }
 }
 
