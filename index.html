@@ -175,12 +175,9 @@ header { background: var(--surface); border-bottom: 1px solid var(--border); pad
 <script>
 // ====================================================
 // ⚠️ 본인 Firebase 프로젝트 설정으로 교체하세요
-// Firebase Console > 프로젝트 설정 > 일반 > "내 앱"에서 복사
 // ====================================================
-// ⚠️ triplus-ai-821a7 프로젝트 firebaseConfig
-// 만약 apiKey가 차단/변경됐으면 GitHub에서 본인 값으로 교체!
 const firebaseConfig = {
-  apiKey: "AIzaSyB7iRmGK1tZnhncEH7sjaydZ8zHElqNpww",
+  apiKey: "AIzaSyDsIgOwLurG64hmWgmksdrWyfxrsCIK_hA",
   authDomain: "triplus-ai-821a7.firebaseapp.com",
   projectId: "triplus-ai-821a7",
   storageBucket: "triplus-ai-821a7.firebasestorage.app",
@@ -188,12 +185,11 @@ const firebaseConfig = {
   appId: "1:816305774166:web:2de540a4375dd232f525f7"
 };
 
-// 시스템 프롬프트 (6가지 원칙 + 유의사항 섹션 포함)
 const SYSTEM_PROMPT = `당신은 현대자동차 트리플러스(TRIP+) 출장관리 Q&A 도우미입니다. 제공된 자료만 근거로 답변하며, 없는 내용은 추측하지 마세요.
 
 ⚠️ 언어 규칙:
 - 반드시 한국어로만 답변
-- 외국어 단어 사용 금지 (다만, 하지만, 또한 등 한국어 사용)
+- 외국어 단어 사용 금지
 
 ⚠️ 형식 규칙 (절대 준수):
 - HTML 태그 절대 사용 금지
@@ -203,164 +199,20 @@ const SYSTEM_PROMPT = `당신은 현대자동차 트리플러스(TRIP+) 출장�
 
 🚫 절대 금지 - HTML 태그 출력 (가장 중요):
 - 어떤 경우에도 다음 태그 출력 금지: <ul>, <li>, <ol>, <table>, <thead>, <tbody>, <tr>, <td>, <th>, <strong>, <b>, <em>, <i>, <p>, <br>, <div>, <span>, <h1>~<h6>
-- 섹션 헤더는 반드시 markdown으로 굵게 처리:
-  - 잘못된 예: 지원 기준\\n<ul><li>...</li></ul>
-  - 올바른 예: **지원 기준**\\n- ...
-- 표는 반드시 markdown 파이프(|) 형식:
-  - 잘못된 예: <table><tr><th>구분</th>...</tr></table>
-  - 올바른 예: | 구분 | 값 |\\n| --- | --- |\\n| ... | ... |
 - 모든 답변은 100% markdown만 사용. HTML 한 태그라도 섞이면 화면이 깨짐.
 
 🚫 절대 금지 - 조항 번호 인용:
 - "제○조", "제○장", "○항", "○호" 등 조항/장/항/호 번호 인용 절대 금지
-- 본문에서도 "제8조에 따르면", "제13조 기준" 같은 표현 사용 금지
-- 출처(📎)에도 조항 번호 표시 금지 → "📎 출장규정집" 처럼 자료명만
-- 자료가 "제8조 ..." 같이 시작해도 답변에서는 조항 번호를 배제하고 내용만 풀어쓸 것
 
 📋 답변 작성 핵심 원칙:
+1. 결론을 한 문장으로 먼저
+2. **굵은 헤더 + 불릿** 패턴
+3. 불릿은 "**라벨**: 설명." 형식
+4. 비교 정보는 markdown 표로
+5. 예외/주의점은 **유의사항** 섹션에
+6. 인사말/사과 제외
 
-1. 결론을 한 문장으로 먼저 (1-2줄)
-2. 그 뒤에 필요한 섹션을 **굵은 헤더 + 불릿** 패턴으로 정리
-3. 불릿은 반드시 "**라벨**: 설명." 형식 (라벨 굵게, 콜론, 한 문장 설명, 마침표로 종결)
-4. 비교 가능한 정보는 반드시 markdown 표로 (구분 / 케이스 컬럼)
-5. 예외/주의점은 **유의사항** 섹션에 별도 정리 (마지막 섹션 또는 마지막 불릿)
-6. 인사말, 사과, "도움이 되셨길 바랍니다" 류 모두 제외
-
-📋 표준 답변 구조 (질문 성격에 따라 필요한 섹션만 사용):
-
-[결론 한 문장]
-
-**[섹션 헤더 1]**
-- **라벨**: 설명.
-- **라벨**: 설명.
-
-**[비교 섹션 헤더]**
-| 구분 | 케이스 A | 케이스 B |
-| --- | --- | --- |
-| ... | ... | ... |
-
-**[절차/방법 섹션 헤더]**
-- **라벨**: 설명.
-
-**유의사항**
-- **항목**: 주의점.
-
-📎 [자료명]
-
-📏 답변 길이 가이드:
-
-▶ 단순 사실 질문 (3-8줄):
-   - 예: "X는 얼마인가요?", "가능한가요?"
-   - 구조: 결론 → (필요 시 표) → 📎 출처
-
-▶ 일반 절차 질문 (10-20줄):
-   - 예: "X 신청 방법은?"
-   - 구조: 결론 → **섹션** + 불릿 → 유의사항 (자료에 있다면) → 📎 출처
-
-▶ 복잡 정책/예외 질문 (20-40줄):
-   - 예: "X 케이스에서 Y는 어떻게?"
-   - 구조: 결론 → **기준 섹션** → **비교 표** → **방법 섹션** → **유의사항** → 📎 출처
-
-▶ 자료 부족 (2-5줄):
-   - 결론(자료 명시 없음) + 권장 조치 + 출처
-
-▶ 잡담/업무 외 (1줄):
-   - "트리플러스 도우미입니다..." 안내만
-
-💡 핵심: 질문이 단순하면 답변도 단순하게! 모든 답변에 모든 섹션을 강제로 넣지 말 것.
-
-업무 외 질문 (잡담, 창작):
-"현대자동차 트리플러스(TRIP+) 출장관리 Q&A 도우미입니다. 출장 규정, 정산 방법, 시스템 사용법에 대해 문의해주세요." 한 줄로만.
-
-📚 답변 예시 (이 형식을 반드시 따라야 함):
-
-[예시 0: 단순 사실 질문]
-질문: 숙박비 한도는 얼마인가요?
-답변: 일반 직원은 1박 8만원 정액, 임원은 직급별로 차등 적용됩니다.
-
-| 직급 구분 | 1박 한도 |
-| --- | --- |
-| 일반 직원 | 80,000원 (정액) |
-| 상무·임원 대우 | 200,000원 |
-| 전무 이상 | 300,000원 |
-| 부사장 이상 | 한도 없음 (실비) |
-
-📎 출장규정집
-
-[예시 0-2: 단순 가능/불가 질문]
-질문: 평일 출장 후 주말에 복귀해도 항공비 청구 가능한가요?
-답변: 가능합니다. 평일 출장 후 주말 복귀편의 항공비는 구간별 1회에 한해 출장비로 청구할 수 있습니다.
-
-📎 출장규정집
-
-[예시 1: 정책 + 예외 - 구조화된 답변]
-질문: 5/20(수)-22(금) 일정으로 제주도로 국내출장 다녀왔습니다. 출장 교통비 정산 시 왕복 비행기 결제 금액을 청구하려고 합니다. 이때 일요일 복귀편으로 항공권 결제한 경우도 지원 가능한지 문의드립니다.
-답변: 일요일 복귀편 항공권 정산은 가능하지만, 해당 주말의 숙박비와 일비는 지급되지 않습니다.
-
-**주말 복귀 정산 기준**
-
-- **교통비 지원**: 평일 출장 후 주말(토/일)에 복귀하는 경우, 구간별 1회에 한해 복귀편 항공비 청구가 가능합니다.
-- **지원 범위**: 실제 사용일이 출장 기간(5/22)과 다르더라도 항공료 실비는 인정됩니다.
-- **미지원 항목**: 출장 공식 종료일(5/22) 이후 발생하는 주말의 숙박비와 일비는 전액 본인 부담입니다.
-- **사전 공유**: 근태 및 사고 예방을 위해 조직장(팀장)에게 사전 보고가 완료되어야 합니다.
-
-**복귀 시점별 정산 범위 비교**
-
-| 구분 | 금요일 복귀 (원칙) | 일요일 복귀 (사용자 케이스) |
-| --- | --- | --- |
-| 항공료 | 전액 실비 지원 | 실비 지원 가능 (구간당 1회) |
-| 일비 | 5/22(금)까지 지급 | 5/22(금)까지만 지급 (주말 제외) |
-| 숙박비 | 5/21(목) 숙박까지 지원 | 5/21(목) 숙박까지만 지원 (주말 제외) |
-
-**청구 방법 및 필수 증빙**
-
-- **청구 방식**: 트리플러스가 아닌 외부 사이트에서 예약한 경우, 정산서 작성 시 복귀 일자를 실제 탑승일(일요일)로 등록하여 청구하십시오.
-- **필수 증빙 (2종)**:
-  1. 항공 E-티켓 (결제 완료된 구매 영수증)
-  2. 결제 영수증 (카드 승인번호 포함)
-- **유의사항**: 좌석 번호가 적힌 탑승권은 증빙으로 인정되지 않으므로 반드시 E-티켓을 첨부해야 합니다.
-
-📎 출장규정집
-
-[예시 2: 직급별 기준 비교]
-질문: 임원 숙박비는 얼마까지 지원되나요?
-답변: 임원의 숙박비는 직급별로 상한이 다르게 적용되며, 일반 직원과 별도의 지급 체계로 운영됩니다.
-
-**직급별 숙박비 한도**
-
-| 직급 구분 | 지급 유형 | 1박 한도 | 비고 |
-| --- | --- | --- | --- |
-| 부사장 이상 | 실비 | 한도 없음 | 실비 전액 정산 |
-| 전무 이상 | 실비 제한 | 300,000원 | 1박 기준 30만원 상한 |
-| 상무·임원 대우 | 실비 제한 | 200,000원 | 1박 기준 20만원 상한 |
-| 일반 직원 | 정액 | 80,000원 | 1박 기준 8만원 정액 지급 |
-
-**적용 기준**
-
-- **정산 방식**: 1박 단위로 정산되며 출장 기간 전체에 대해 적용.
-- **증빙 요건**: 실비 정산 시 숙박 결제 영수증과 인보이스(또는 예약 내역) 제출 필수.
-
-**유의사항**
-
-- **한도 초과**: 임원 직급의 경우 한도 초과 금액은 지급되지 않으므로 예약 전 금액 확인 필요.
-- **본인 부담**: 일반 직원이 1박 80,000원을 초과해 결제한 경우 초과 금액은 본인 부담.
-
-📎 출장규정집
-
-[예시 3: 자료 부족]
-질문: 외주직원 출장비 기준은?
-답변: 자료에 명시되지 않은 항목입니다.
-
-**확인 가능 사항**
-
-- **정규직 기준만 명시**: 본 자료는 현대자동차 임직원을 대상으로 하며 외주직원에 대한 별도 기준은 확인되지 않습니다.
-
-**권장 조치**
-
-- **인사팀 문의**: 외주직원 출장비 기준 직접 문의.
-- **계약서 확인**: 외주 계약서에 출장비 관련 별도 조항이 있는지 확인.
-
-📎 자료 출처 없음`;
+📎 출장규정집`;
 
 // 전역 변수
 firebase.initializeApp(firebaseConfig);
@@ -378,26 +230,46 @@ let HAS_EMBEDDINGS = false;
 async function init() {
   setStatus("연결 중...", "warn");
 
-  // ★ 마이그레이션: 옛 비압축 캐시가 quota를 차지하고 있으면 정리하여 새 압축본으로 전환
-  // 캐시된 문자열이 JSON 시작 문자(`[` / `{`)면 옛 비압축본 → 정리
-  // (압축본은 항상 LZ-String UTF-16 인코딩이라 시작 문자가 다름)
+  // ★ 마이그레이션 1: 옛 비압축 캐시 정리
   try {
     const oldMeta = localStorage.getItem("triplus_chunks_meta");
     if (oldMeta && oldMeta.length > 50000 && (oldMeta[0] === '[' || oldMeta[0] === '{')) {
-      console.log("⚙️ 옛 비압축 캐시 감지 → 정리 (다음 로드 시 압축본으로 재저장)");
+      console.log("⚙️ 옛 비압축 캐시 감지 → 정리");
       localStorage.removeItem("triplus_chunks_meta");
       localStorage.removeItem("triplus_chunks_emb");
       localStorage.removeItem("triplus_chunks_cache_time");
       localStorage.removeItem("triplus_chunks_count");
     }
-  } catch (_e) { /* 마이그레이션 실패는 무시 */ }
+  } catch (_e) {}
+
+  // ★ 마이그레이션 2: raw HTML이 남아있는 답변 캐시 자동 청소
+  try {
+    const htmlTagRe = /<(ul|ol|li|table|thead|tbody|tr|th|td|strong|b|em|i|p|br|div|span)\b/i;
+    const keysToCheck = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith("ans_")) keysToCheck.push(k);
+    }
+    let cleaned = 0;
+    for (const k of keysToCheck) {
+      try {
+        const obj = JSON.parse(localStorage.getItem(k));
+        if (obj && obj.answer && htmlTagRe.test(obj.answer)) {
+          localStorage.removeItem(k);
+          cleaned++;
+        }
+      } catch (_e) { localStorage.removeItem(k); cleaned++; }
+    }
+    if (cleaned > 0) {
+      console.log(`🧹 raw HTML이 남아있던 옛 답변 캐시 ${cleaned}개 청소 완료 — 다음 검색부터 깔끔하게 표시됩니다.`);
+    }
+  } catch (_e) {}
 
   try {
-    // 1. config에서 API 키 가져오기 (Gemini + Groq)
     const configDoc = await db.collection("config").doc("public").get();
     if (!configDoc.exists) {
       setStatus("설정 필요", "err");
-      showError("관리자가 아직 시스템을 초기화하지 않았습니다.<br>관리자 페이지에서 초기 설정을 완료해주세요.");
+      showError("관리자가 아직 시스템을 초기화하지 않았습니다.");
       return;
     }
     GEMINI_KEY = configDoc.data().gemini_api_key || "";
@@ -405,23 +277,17 @@ async function init() {
     
     if (!GEMINI_KEY && !GROQ_KEY) {
       setStatus("API 키 없음", "err");
-      showError("API 키가 설정되지 않았습니다.<br>관리자가 Gemini 또는 Groq 키를 등록해주세요.");
+      showError("API 키가 설정되지 않았습니다.");
       return;
     }
-    if (!GROQ_KEY) {
-      console.warn("Groq 키 없음. Gemini 답변 생성 사용 (quota 제한 있음)");
-    }
     
-    // 2. 자료 로드 - 캐시 우선 사용 (Firebase reads 최소화)
-    // 메타데이터와 임베딩을 분리 저장하여 localStorage 용량 문제 해결
-    const META_CACHE_KEY = "triplus_chunks_meta";        // 가벼움 (수백 KB)
-    const EMB_CACHE_KEY = "triplus_chunks_emb";          // 무거움 (수 MB)
+    const META_CACHE_KEY = "triplus_chunks_meta";
+    const EMB_CACHE_KEY = "triplus_chunks_emb";
     const CACHE_TIME_KEY = "triplus_chunks_cache_time";
     const CACHE_COUNT_KEY = "triplus_chunks_count";
-    const CACHE_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7일
-    const CHECK_INTERVAL = 12 * 60 * 60 * 1000; // 12시간
+    const CACHE_MAX_AGE = 7 * 24 * 60 * 60 * 1000;
+    const CHECK_INTERVAL = 12 * 60 * 60 * 1000;
     
-    // 강제 새로고침 체크 (?refresh=1)
     const urlParams = new URLSearchParams(window.location.search);
     const forceRefresh = urlParams.get('refresh') === '1';
     
@@ -432,51 +298,32 @@ async function init() {
     
     if (isValid) {
       try {
-        // 메타데이터 먼저 로드 (빠름!)
         CHUNKS = JSON.parse(cachedMeta);
-        
-        // 임베딩은 별도로 로드 시도 (실패해도 메타로 검색 가능)
         try {
           const cachedEmb = lzGet(EMB_CACHE_KEY);
-          if (cachedEmb) {
-            EMBEDDINGS = JSON.parse(cachedEmb);
-          } else {
-            EMBEDDINGS = {};
-          }
-        } catch (e) {
-          EMBEDDINGS = {};
-          console.warn("임베딩 캐시 로드 실패 (키워드 검색 모드):", e);
-        }
+          EMBEDDINGS = cachedEmb ? JSON.parse(cachedEmb) : {};
+        } catch (e) { EMBEDDINGS = {}; }
         
         HAS_EMBEDDINGS = Object.keys(EMBEDDINGS).length > 0;
-        const ageHours = Math.round(cacheAge / 1000 / 60 / 60);
-        console.log(`✓ 캐시 사용: ${CHUNKS.length}개 청크 (Firebase reads 0, ${ageHours}시간 전)`);
+        console.log(`✓ 캐시 사용: ${CHUNKS.length}개 청크`);
         setStatus(`✓ 준비 완료 (${CHUNKS.length}개, 캐시)`, "ok");
         
-        // 백그라운드 변경 감지 (12시간 후만)
         if (cacheAge > CHECK_INTERVAL) {
           setTimeout(() => checkForUpdates(CHUNKS.length), 2000);
         }
         return;
-      } catch (e) {
-        console.warn("캐시 파싱 실패, 새로 로드:", e);
-      }
+      } catch (e) { console.warn("캐시 파싱 실패:", e); }
     }
     
-    // 3. Firestore에서 청크 로드 (캐시 없거나 만료)
-    setStatus("자료 로드 중... (0%)", "warn");
+    setStatus("자료 로드 중...", "warn");
     showLoadingMessage("자료 다운로드 중...");
     
     const snap = await db.collection("chunks").get();
     const totalDocs = snap.docs.length;
     
-    setStatus(`자료 처리 중... (0/${totalDocs})`, "warn");
-    showLoadingMessage(`자료 처리 중... (0/${totalDocs})`);
-    
     CHUNKS = [];
     EMBEDDINGS = {};
     
-    // 청크 단위로 처리 (UI 블로킹 방지)
     const BATCH_SIZE = 200;
     for (let i = 0; i < snap.docs.length; i += BATCH_SIZE) {
       const batch = snap.docs.slice(i, i + BATCH_SIZE);
@@ -500,7 +347,6 @@ async function init() {
       setStatus(`자료 처리 중... (${progress}/${totalDocs}, ${percent}%)`, "warn");
       showLoadingMessage(`자료 처리 중... (${progress}/${totalDocs})`);
       
-      // UI 갱신 대기 (블로킹 방지)
       if (i + BATCH_SIZE < snap.docs.length) {
         await new Promise(r => setTimeout(r, 0));
       }
@@ -508,57 +354,33 @@ async function init() {
     
     HAS_EMBEDDINGS = Object.keys(EMBEDDINGS).length > 0;
     
-    // 4. 캐시 저장 (메타데이터 + 임베딩 분리)
     setStatus("캐시 저장 중...", "warn");
     showLoadingMessage("캐시 저장 중...");
     
-    // 4-1. 메타데이터 저장 (가벼움, 거의 항상 성공)
-    // ★ content 필드는 캐시에서 제외 — search_text = title+content 이므로 정보 중복.
-    //   검색 점수는 search_text로 매기고, LLM 컨텍스트도 search_text로 충분.
-    //   메모리상 CHUNKS는 content를 그대로 유지 (이번 세션 동안만).
-    // ★ LZString으로 압축 저장 → 한글 텍스트는 보통 50-70% 추가 절감
-    let metaSaved = false;
     const slimChunks = CHUNKS.map(c => ({
-      id: c.id,
-      source: c.source,
-      category: c.category,
-      title: c.title,
+      id: c.id, source: c.source, category: c.category, title: c.title,
       search_text: c.search_text || ((c.title || "") + "\n" + (c.content || ""))
-      // content는 저장하지 않음 (용량 절약)
     }));
     const metaJson = JSON.stringify(slimChunks);
     const compressedMeta = window.LZString ? LZString.compressToUTF16(metaJson) : metaJson;
-    console.log(`📦 메타 캐시: ${(metaJson.length / 1024 / 1024).toFixed(2)} MB → 압축 후 ${(compressedMeta.length * 2 / 1024 / 1024).toFixed(2)} MB (${CHUNKS.length}개 청크)`);
-    metaSaved = trySaveMetaCache(compressedMeta, META_CACHE_KEY, CACHE_TIME_KEY, CACHE_COUNT_KEY, CHUNKS.length);
+    trySaveMetaCache(compressedMeta, META_CACHE_KEY, CACHE_TIME_KEY, CACHE_COUNT_KEY, CHUNKS.length);
 
-    // 4-2. 임베딩 저장 (무거움, 용량 초과 가능) — LZString 압축
     if (HAS_EMBEDDINGS) {
       try {
         const embJson = JSON.stringify(EMBEDDINGS);
         const compressedEmb = window.LZString ? LZString.compressToUTF16(embJson) : embJson;
-        console.log(`📦 임베딩 캐시: ${(embJson.length / 1024 / 1024).toFixed(2)} MB → 압축 후 ${(compressedEmb.length * 2 / 1024 / 1024).toFixed(2)} MB`);
         localStorage.setItem(EMB_CACHE_KEY, compressedEmb);
-        console.log(`✓ 임베딩 캐시 저장 (${Object.keys(EMBEDDINGS).length}개)`);
-      } catch (e) {
-        console.warn(`⚠ 임베딩 캐시 저장 실패 (용량 초과). 키워드 검색은 정상 작동:`, e.message);
-        // 임베딩 저장 실패해도 검색은 가능 (메모리에는 있음)
-        // 다음 방문 시는 임베딩 없이 키워드 검색만 가능
-      }
-    }
-    
-    if (metaSaved) {
-      console.log(`✓ 다음 7일 동안 Firebase reads 0`);
+      } catch (e) { console.warn("⚠ 임베딩 캐시 저장 실패:", e.message); }
     }
     
     hideLoadingMessage();
     setStatus(`✓ 준비 완료 (${CHUNKS.length}개)`, "ok");
-    console.log(`✅ ${CHUNKS.length}개 청크, ${Object.keys(EMBEDDINGS).length}개 임베딩 로드됨`);
     
   } catch (e) {
     console.error(e);
     hideLoadingMessage();
     setStatus("연결 실패", "err");
-    showError(`초기화 실패: ${e.message}<br>잠시 후 새로고침 해보세요.`);
+    showError(`초기화 실패: ${e.message}`);
   }
 }
 
@@ -568,22 +390,14 @@ function setStatus(text, type) {
   el.className = "status-badge status-" + type;
 }
 
-// 로딩 메시지 표시 (화면 중앙)
 function showLoadingMessage(text) {
   let loader = document.getElementById("initLoader");
   if (!loader) {
     loader = document.createElement("div");
     loader.id = "initLoader";
-    loader.style.cssText = "position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:24px 32px;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.15);z-index:9999;text-align:center;font-family:'Noto Sans KR',sans-serif;min-width:280px;border:1px solid #e2e8f0;";
-    loader.innerHTML = `
-      <div style="margin-bottom:12px;">
-        <div style="width:40px;height:40px;border:3px solid #e2e8f0;border-top-color:#3b82f6;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto;"></div>
-      </div>
-      <div id="initLoaderText" style="color:#1e293b;font-size:14px;font-weight:500;">자료 로드 중...</div>
-      <div style="color:#64748b;font-size:12px;margin-top:8px;">처음 접속 시 시간이 걸릴 수 있습니다</div>
-    `;
+    loader.style.cssText = "position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:24px 32px;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.15);z-index:9999;text-align:center;min-width:280px;border:1px solid #e2e8f0;";
+    loader.innerHTML = `<div style="margin-bottom:12px;"><div style="width:40px;height:40px;border:3px solid #e2e8f0;border-top-color:#3b82f6;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto;"></div></div><div id="initLoaderText" style="color:#1e293b;font-size:14px;font-weight:500;">자료 로드 중...</div>`;
     document.body.appendChild(loader);
-    // 스피너 애니메이션 CSS 추가
     if (!document.getElementById("spinKeyframes")) {
       const style = document.createElement("style");
       style.id = "spinKeyframes";
@@ -604,108 +418,64 @@ function hideLoadingMessage() {
   }
 }
 
-// ====================================================
-// 백그라운드 자료 변경 감지 (Firebase reads 최소화)
-// 캐시 사용 후 가장 최근 문서 1개만 확인 (1 read만)
-// ====================================================
 async function checkForUpdates(cachedCount) {
   try {
-    // 자료 변경 감지: count() 시도, 실패 시 무시
     let serverCount = null;
-    
-    // 방법 1: count() (v9.6+ 지원)
     try {
       const countSnap = await db.collection("chunks").count().get();
       serverCount = countSnap.data().count;
-    } catch (countErr) {
-      // count() 안 되면 백그라운드 체크 그냥 패스
-      console.log("자료 변경 감지 패스 (count 미지원)");
-      return;
-    }
+    } catch (countErr) { return; }
     
     if (serverCount !== null && serverCount !== cachedCount) {
-      console.log(`📥 자료 변경 감지: 캐시 ${cachedCount}개 → 서버 ${serverCount}개`);
-      
-      // 사용자에게 알림 (상태 배지 클릭 가능하게)
       const badge = document.getElementById("statusBadge");
       if (badge) {
         badge.textContent = `⚠ 자료 업데이트 (클릭하여 새로고침)`;
         badge.className = "status-badge status-warn";
         badge.style.cursor = "pointer";
-        badge.title = "클릭 시 새 자료 가져오기";
         badge.onclick = () => {
-          localStorage.removeItem("triplus_chunks_cache");
+          localStorage.removeItem("triplus_chunks_meta");
           localStorage.removeItem("triplus_chunks_cache_time");
-          localStorage.removeItem("triplus_chunks_count");
           window.location.href = window.location.pathname + "?refresh=1";
         };
       }
-    } else {
-      console.log(`✓ 자료 최신 상태 (${serverCount}개)`);
     }
-  } catch (e) {
-    // 변경 감지 실패는 무시 (캐시 그대로 사용)
-    console.warn("자료 변경 감지 실패:", e.message);
-  }
+  } catch (e) {}
 }
 
-// ====================================================
 // 검색
-// ====================================================
-
-// X 버튼 (입력 내용 지우기)
 (function setupClearBtn() {
   const input = document.getElementById("searchInput");
   const clearBtn = document.getElementById("clearBtn");
   if (!input || !clearBtn) return;
   
-  // 입력 변화 감지 → X 버튼 표시/숨김
   function toggleClear() {
-    if (input.value.length > 0) {
-      clearBtn.classList.add("show");
-    } else {
-      clearBtn.classList.remove("show");
-    }
+    if (input.value.length > 0) clearBtn.classList.add("show");
+    else clearBtn.classList.remove("show");
   }
   
   input.addEventListener("input", toggleClear);
   input.addEventListener("change", toggleClear);
-  
-  // X 클릭 → 내용 삭제 + 포커스
   clearBtn.addEventListener("click", function() {
     input.value = "";
     clearBtn.classList.remove("show");
     input.focus();
   });
-  
-  // Enter 키로 검색
   input.addEventListener("keydown", function(e) {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      doSearch();
-    }
+    if (e.key === "Enter") { e.preventDefault(); doSearch(); }
   });
 })();
 
-// 답변 복사 함수
 let _lastAnswer = "";
 
 function copyAnswer() {
   if (!_lastAnswer) return;
-
   const copyBtn = document.getElementById("copyBtn");
   const copyText = document.getElementById("copyBtnText");
   const copyIcon = document.getElementById("copyBtnIcon");
-
-  // 1) HTML 버전: 화면에 그려진 답변 그대로 (Word/Slack/Notion 등 리치 텍스트 환경에서 서식 유지)
   const aiContent = document.getElementById("aiContent");
-  // 복사용으로 깔끔하게 wrap (인라인 스타일 약간 부여 → 외부 앱 호환성↑)
   const wrappedHtml = `<div style="font-family:'Malgun Gothic','Noto Sans KR',sans-serif;font-size:14px;line-height:1.7;color:#1a1f36;">${aiContent.innerHTML}</div>`;
-
-  // 2) Plain text 버전: markdown 기호 제거된 깔끔한 텍스트 (메모장 등 plain text 환경용)
   const plainText = markdownToPlainText(_lastAnswer);
 
-  // ClipboardItem 지원 시 → HTML + plain text 둘 다 동시에 클립보드에
   if (navigator.clipboard && navigator.clipboard.write && window.ClipboardItem) {
     try {
       const item = new ClipboardItem({
@@ -713,21 +483,14 @@ function copyAnswer() {
         "text/plain": new Blob([plainText], { type: "text/plain" })
       });
       navigator.clipboard.write([item]).then(showCopySuccess).catch(() => {
-        // 폴백 1: writeText로 plain text만
-        navigator.clipboard.writeText(plainText).then(showCopySuccess).catch(() => {
-          fallbackCopyRich(wrappedHtml, plainText);
-        });
+        navigator.clipboard.writeText(plainText).then(showCopySuccess).catch(() => fallbackCopyRich(wrappedHtml, plainText));
       });
       return;
-    } catch (_e) {
-      // ClipboardItem 생성 실패 → 폴백
-    }
+    } catch (_e) {}
   }
 
   if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(plainText).then(showCopySuccess).catch(() => {
-      fallbackCopyRich(wrappedHtml, plainText);
-    });
+    navigator.clipboard.writeText(plainText).then(showCopySuccess).catch(() => fallbackCopyRich(wrappedHtml, plainText));
   } else {
     fallbackCopyRich(wrappedHtml, plainText);
   }
@@ -743,96 +506,65 @@ function copyAnswer() {
     }, 2000);
   }
 
-  // 구형 브라우저 폴백: contenteditable div를 선택하면 brower가 자동으로 HTML도 클립보드에 넣음
   function fallbackCopyRich(html, text) {
     const div = document.createElement("div");
     div.contentEditable = "true";
     div.innerHTML = html;
-    div.style.position = "fixed";
-    div.style.top = "-9999px";
-    div.style.opacity = "0";
+    div.style.position = "fixed"; div.style.top = "-9999px"; div.style.opacity = "0";
     document.body.appendChild(div);
     const range = document.createRange();
     range.selectNodeContents(div);
     const sel = window.getSelection();
-    sel.removeAllRanges();
-    sel.addRange(range);
+    sel.removeAllRanges(); sel.addRange(range);
     try {
       document.execCommand("copy");
       showCopySuccess();
     } catch (_e) {
-      // 최종 폴백: 텍스트만
       try {
         const ta = document.createElement("textarea");
         ta.value = text;
-        ta.style.position = "fixed";
-        ta.style.top = "-9999px";
+        ta.style.position = "fixed"; ta.style.top = "-9999px";
         document.body.appendChild(ta);
         ta.select();
         document.execCommand("copy");
         document.body.removeChild(ta);
         showCopySuccess();
-      } catch (_e2) {
-        alert("복사 실패. 직접 선택해서 복사해주세요.");
-      }
+      } catch (_e2) { alert("복사 실패."); }
     }
     sel.removeAllRanges();
     document.body.removeChild(div);
   }
 }
 
-// Markdown → Plain text (복사용: 메모장 등 plain text 환경에서 깔끔하게 보이도록)
 function markdownToPlainText(md) {
   if (!md) return "";
   let text = md;
-
-  // 1) markdown 표 → 정렬된 텍스트 표
   text = text.replace(/(\|[^\n]+\|\n\|[\s\-:|]+\|\n(?:\|[^\n]+\|\n?)+)/g, (table) => {
     const lines = table.trim().split("\n");
     const dataLines = [lines[0], ...lines.slice(2)];
     const rows = dataLines.map(line => {
       const cells = line.split("|");
-      // 좌우 빈 셀 제거
       if (cells.length > 0 && !cells[0].trim()) cells.shift();
       if (cells.length > 0 && !cells[cells.length - 1].trim()) cells.pop();
-      // 셀 내 markdown bold 등 정리
       return cells.map(c => c.replace(/\*\*(.+?)\*\*/g, "$1").replace(/\*(.+?)\*/g, "$1").trim());
     });
-    // 각 컬럼의 최대 너비 (한글 가독성 위해 [...]로 char 단위)
     const widths = [];
-    rows.forEach(r => r.forEach((c, i) => {
-      widths[i] = Math.max(widths[i] || 0, [...c].length);
-    }));
-    const formatted = rows.map(r =>
-      r.map((c, i) => c + " ".repeat(Math.max(0, widths[i] - [...c].length))).join("  │  ")
-    );
-    // 헤더 아래 구분선
+    rows.forEach(r => r.forEach((c, i) => { widths[i] = Math.max(widths[i] || 0, [...c].length); }));
+    const formatted = rows.map(r => r.map((c, i) => c + " ".repeat(Math.max(0, widths[i] - [...c].length))).join("  │  "));
     const sep = widths.map(w => "─".repeat(w)).join("──┼──");
     return "\n" + formatted[0] + "\n" + sep + "\n" + formatted.slice(1).join("\n") + "\n";
   });
-
-  // 2) 헤더 (##, ###) 제거
   text = text.replace(/^#{1,6}\s+/gm, "");
-
-  // 3) 굵은 글씨 / 이탤릭 마크다운 제거
   text = text.replace(/\*\*(.+?)\*\*/g, "$1");
   text = text.replace(/(?<!\*)\*([^*\n]+?)\*(?!\*)/g, "$1");
-
-  // 4) 인라인 코드 제거
   text = text.replace(/`([^`]+)`/g, "$1");
-
-  // 5) 링크 [텍스트](url) → 텍스트
   text = text.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1");
-
-  // 6) 여러 줄바꿈 정리
   text = text.replace(/\n{3,}/g, "\n\n");
-
   return text.trim();
 }
 
 function setQ(q) {
   document.getElementById("searchInput").value = q;
-  // X 버튼 표시 트리거
   document.getElementById("clearBtn").classList.add("show");
   doSearch();
 }
@@ -840,19 +572,11 @@ function setQ(q) {
 async function doSearch() {
   const query = document.getElementById("searchInput").value.trim();
   if (!query) return;
-  
-  if (CHUNKS.length === 0) {
-    showError("자료가 로드되지 않았습니다. 페이지를 새로고침하세요.");
-    return;
-  }
-  if (!GEMINI_KEY) {
-    showError("API 키가 설정되지 않았습니다. 관리자에게 문의하세요.");
-    return;
-  }
+  if (CHUNKS.length === 0) { showError("자료가 로드되지 않았습니다."); return; }
+  if (!GEMINI_KEY) { showError("API 키가 설정되지 않았습니다."); return; }
   
   const btn = document.getElementById("searchBtn");
-  btn.disabled = true;
-  btn.textContent = "검색 중...";
+  btn.disabled = true; btn.textContent = "검색 중...";
   
   document.getElementById("welcome").style.display = "none";
   const aiBox = document.getElementById("aiBox");
@@ -865,62 +589,41 @@ async function doSearch() {
   const startTime = Date.now();
   
   try {
-    // 1. 관련 청크 검색 (하이브리드: 의미 + 키워드)
     let topChunks;
     if (HAS_EMBEDDINGS) {
       document.getElementById("aiSub").textContent = "의미 + 키워드 검색 중...";
-      
-      // 1-A. 의미 검색 (8개)
       const semanticResults = await searchSemantic(query, 8);
-      
-      // 1-B. 키워드 검색 (5개) - 의미 검색이 놓친 자료 보완
       const keywordResults = searchKeyword(query, 5);
-      
-      // 1-C. 두 결과 병합 (중복 제거)
       const seen = new Set(semanticResults.map(r => r.chunk.id));
       const merged = [...semanticResults];
       for (const k of keywordResults) {
-        if (!seen.has(k.chunk.id)) {
-          merged.push(k);
-          seen.add(k.chunk.id);
-        }
+        if (!seen.has(k.chunk.id)) { merged.push(k); seen.add(k.chunk.id); }
       }
-      
-      // 최대 10개로 제한
       topChunks = merged.slice(0, 10);
-      console.log(`✓ 하이브리드 검색: 의미 ${semanticResults.length} + 키워드 추가 ${merged.length - semanticResults.length}`);
     } else {
       document.getElementById("aiSub").textContent = "키워드 검색 중...";
       topChunks = searchKeyword(query, 8);
     }
     
     if (topChunks.length === 0) {
-      aiContent.innerHTML = `<div class="error-msg">관련 자료를 찾을 수 없습니다. 다른 키워드로 시도해보세요.</div>`;
+      aiContent.innerHTML = `<div class="error-msg">관련 자료를 찾을 수 없습니다.</div>`;
       return;
     }
     
-    // 2. AI 답변 생성
     aiContent.innerHTML = `<div class="ai-loading"><div class="spinner"></div>답변 생성 중...</div>`;
     document.getElementById("aiSub").textContent = "AI 답변 작성 중...";
     
     const answer = await generateAnswer(query, topChunks);
-    
-    // 답변 저장 (복사 버튼용)
     _lastAnswer = answer;
     
-    // 3. 렌더링
     aiContent.innerHTML = renderMarkdown(answer);
     const elapsed = Date.now() - startTime;
-    document.getElementById("aiSub").textContent = 
-      `${HAS_EMBEDDINGS ? "의미 검색" : "키워드 검색"} · ${topChunks.length}개 자료 · ${elapsed}ms`;
+    document.getElementById("aiSub").textContent = `${HAS_EMBEDDINGS ? "의미 검색" : "키워드 검색"} · ${topChunks.length}개 자료 · ${elapsed}ms`;
     
-    // 복사 버튼 표시
     document.getElementById("copyBtn").style.display = "flex";
-    
     renderSources(topChunks);
     sourcesSection.style.display = "block";
     
-    // 4. 로그 기록 (캐시 답변일 땐 스킵, write 절약)
     const isCached = answer.includes("이전 답변 캐시 사용");
     if (!isCached) {
       try {
@@ -931,21 +634,17 @@ async function doSearch() {
           elapsed_ms: elapsed,
           timestamp: firebase.firestore.FieldValue.serverTimestamp()
         });
-      } catch (e) { console.warn("로그 실패:", e); }
+      } catch (e) {}
     }
     
   } catch (e) {
     console.error(e);
     aiContent.innerHTML = `<div class="error-msg">❌ ${e.message}</div>`;
   } finally {
-    btn.disabled = false;
-    btn.textContent = "AI 검색";
+    btn.disabled = false; btn.textContent = "AI 검색";
   }
 }
 
-// ====================================================
-// 의미 검색
-// ====================================================
 async function searchSemantic(query, topK) {
   const queryEmb = await embedQuery(query);
   const scored = [];
@@ -959,9 +658,7 @@ async function searchSemantic(query, topK) {
 }
 
 async function embedQuery(text) {
-  if (!GEMINI_KEY) {
-    throw new Error("Gemini API 키가 등록되지 않았습니다. 관리자가 Gemini 키를 Firestore에 등록해야 합니다.");
-  }
+  if (!GEMINI_KEY) throw new Error("Gemini API 키가 등록되지 않았습니다.");
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=${GEMINI_KEY}`;
   const res = await fetch(url, {
     method: "POST",
@@ -974,12 +671,8 @@ async function embedQuery(text) {
   });
   if (!res.ok) {
     const err = await res.text();
-    if (res.status === 429) {
-      throw new Error(`임베딩 quota 초과. 잠시 후 다시 시도하거나 관리자에게 Gemini 키 갱신을 문의하세요.`);
-    }
-    if (res.status === 400 || res.status === 403) {
-      throw new Error(`Gemini 키 문제 (${res.status}). 관리자가 Firestore의 gemini_api_key를 새 키로 갱신해야 합니다.`);
-    }
+    if (res.status === 429) throw new Error("임베딩 quota 초과.");
+    if (res.status === 400 || res.status === 403) throw new Error(`Gemini 키 문제 (${res.status}).`);
     throw new Error(`임베딩 오류 (${res.status}): ${err.slice(0, 100)}`);
   }
   const data = await res.json();
@@ -989,20 +682,14 @@ async function embedQuery(text) {
 function cosineSim(a, b) {
   let dot = 0, na = 0, nb = 0;
   for (let i = 0; i < a.length; i++) {
-    dot += a[i] * b[i];
-    na += a[i] * a[i];
-    nb += b[i] * b[i];
+    dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i];
   }
   return dot / (Math.sqrt(na) * Math.sqrt(nb) + 1e-10);
 }
 
-// ====================================================
-// 키워드 검색 (fallback)
-// ====================================================
 function searchKeyword(query, topK) {
   const tokens = query.toLowerCase().split(/[\s,.\?!()[\]{}'":;~`!@#$%^&*+=<>\/\\|]+/).filter(t => t.length >= 2);
   if (tokens.length === 0) return [];
-  
   const scored = [];
   for (const chunk of CHUNKS) {
     const text = (chunk.search_text || "").toLowerCase();
@@ -1021,99 +708,64 @@ function searchKeyword(query, topK) {
   return scored.slice(0, topK);
 }
 
-// ====================================================
-// AI 답변 생성 (Groq 전용 - Gemini 폴백 없음)
-// ====================================================
 async function generateAnswer(query, topChunks) {
-  // [캐싱] 동일 질문이면 캐시 반환 (quota 절약!)
   const cacheKey = "ans_" + simpleHash(query.toLowerCase().trim());
   try {
     const cached = localStorage.getItem(cacheKey);
     if (cached) {
       const obj = JSON.parse(cached);
-      // 24시간 이내 캐시면 사용
       if (Date.now() - obj.ts < 24 * 60 * 60 * 1000) {
-        console.log("✓ 캐시된 답변 사용 (quota 절약)");
-        // ★ 옛 버전 캐시에 raw HTML 태그가 남아있을 수 있으므로 postProcessKorean 한 번 더 적용
         const cleaned = postProcessKorean(obj.answer);
-        // 정리된 결과가 원본과 다르면 캐시 업데이트 (다음 번부터는 정리된 채로 빠르게 반환)
-        if (cleaned !== obj.answer) {
-          cacheAnswer(cacheKey, cleaned);
-        }
+        if (cleaned !== obj.answer) cacheAnswer(cacheKey, cleaned);
         return cleaned + "\n\n*(이전 답변 캐시 사용 · API 호출 0회)*";
       }
     }
-  } catch (e) { /* 캐시 실패는 무시 */ }
+  } catch (e) {}
   
-  // [토큰 절약] 자료 content를 800자로 제한 (Groq TPM 한도 12000 안에서 안정 동작)
-  // 캐시에서 로드된 chunks는 content가 없을 수 있으므로 search_text를 폴백으로 사용
-  // (search_text = title + "\n" + content 형태라 title 부분은 별도로 안 붙임)
   const context = topChunks.map((x, i) => {
     const c = x.chunk;
     const body = c.content || c.search_text || "";
     const trimmed = body.slice(0, 800);
-    if (c.content) {
-      return `[자료${i+1}] ${c.source}/${c.category || ""}\n${c.title}\n${trimmed}`;
-    } else {
-      // search_text 폴백: 이미 title 포함되어 있어 별도로 안 붙임
-      return `[자료${i+1}] ${c.source}/${c.category || ""}\n${trimmed}`;
-    }
+    if (c.content) return `[자료${i+1}] ${c.source}/${c.category || ""}\n${c.title}\n${trimmed}`;
+    else return `[자료${i+1}] ${c.source}/${c.category || ""}\n${trimmed}`;
   }).join("\n---\n");
   
-  const userMsg = `[참고 자료]\n${context}\n\n[질문]\n${query}\n\n위 자료만 근거로 답변. 반드시 한국어, HTML 태그 금지, markdown만.\n\n🚫 조항 번호(제○조/제○장/○항/○호) 본문·출처 모두 인용 금지. 자료 내용을 풀어쓰되 조항 번호는 배제.\n\n📋 답변 구조: 결론 1문장 → **굵은 섹션 헤더** + 「**라벨**: 설명.」 형식 불릿 → 비교 필요시 markdown 표 → **유의사항** 섹션 → 📎 [자료명].\n\n⚠️ 답변 길이 가이드 (질문 복잡도에 맞춰서):\n- 단순 사실 질문 (얼마/무엇/가능?): 3-8줄 (결론 + 짧은 표 + 출처)\n- 일반 절차 질문: 10-15줄 (결론 + 단계 + 유의사항)\n- 복잡한 정책/예외 질문: 20-40줄 (결론 + 근거 + 표 + 조치 + 유의사항 + 출처)\n- 자료 부족: 2-5줄\n\n질문이 단순하면 답변도 단순하게! 모든 답변에 모든 섹션 강제로 넣지 말 것.\n\n구조: 결론(1-2문장) → 필요한 섹션만 → 자료에 예외/제한이 있을 때만 **유의사항** → 📎 출처.`;
+  const userMsg = `[참고 자료]\n${context}\n\n[질문]\n${query}\n\n위 자료만 근거로 답변. 반드시 한국어, HTML 태그 금지, markdown만.`;
   
-  // ★ Groq 사용 (Gemini 폴백 없음 - quota 부담 X)
-  if (!GROQ_KEY) {
-    throw new Error("Groq API 키가 등록되지 않았습니다. 관리자에게 문의하세요.");
-  }
+  if (!GROQ_KEY) throw new Error("Groq API 키가 등록되지 않았습니다.");
   
   const answer = await callGroq(userMsg);
   cacheAnswer(cacheKey, answer);
   return answer;
 }
 
-// Groq API 호출 (Llama 3.3 70B - 한국어 좋음)
-// 429 (Rate limit) 시 1회 자동 재시도 (서버가 알려준 대기 시간 또는 12초 기본)
 async function callGroq(userMsg, retryCount = 0) {
   const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
-    headers: {
-      "Authorization": `Bearer ${GROQ_KEY}`,
-      "Content-Type": "application/json"
-    },
+    headers: { "Authorization": `Bearer ${GROQ_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       model: "llama-3.3-70b-versatile",
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user", content: userMsg }
       ],
-      max_tokens: 2048,
-      temperature: 0.2
+      max_tokens: 2048, temperature: 0.2
     })
   });
-
   if (!res.ok) {
     const errText = await res.text();
-    // 429 Rate limit → 자동 재시도 (1회만)
     if (res.status === 429 && retryCount < 1) {
-      // Groq는 응답 본문에 "try again in 15.2s" 같은 안내를 줌. 헤더 retry-after도 확인.
       let waitSec = parseFloat(res.headers.get("retry-after") || "0");
       if (!waitSec || waitSec < 0.5) {
         const m = errText.match(/try again in ([\d.]+)\s*s/i);
         waitSec = m ? parseFloat(m[1]) : 0;
       }
-      // 최소 5초, 최대 60초로 클램프 (안전장치)
       waitSec = Math.max(5, Math.min(60, waitSec || 12));
-      console.warn(`⏳ Groq Rate Limit (429) — ${waitSec.toFixed(1)}초 대기 후 자동 재시도`);
-      // 사용자에게도 진행 상황 노출
       try { showLoadingMessage(`잠시만요... API 한도로 ${Math.ceil(waitSec)}초 대기 중`); } catch (_e) {}
       await new Promise(r => setTimeout(r, Math.round(waitSec * 1000)));
       return callGroq(userMsg, retryCount + 1);
     }
-    // 429 재시도 후에도 실패하면 사용자에게 친절한 안내
-    if (res.status === 429) {
-      throw new Error("일시적으로 API 사용량이 많습니다. 1분 후 다시 시도해주세요.");
-    }
+    if (res.status === 429) throw new Error("일시적으로 API 사용량이 많습니다.");
     throw new Error(`Groq 오류 (${res.status}): ${errText.slice(0, 200)}`);
   }
   const data = await res.json();
@@ -1121,36 +773,38 @@ async function callGroq(userMsg, retryCount = 0) {
   return postProcessKorean(data.choices[0].message.content);
 }
 
-// 답변 후처리: 외국어 단어 → 한국어 자동 변환
+// 답변 후처리: HTML → markdown 변환 + 외국어 → 한국어
 function postProcessKorean(text) {
   if (!text) return text;
   let result = text;
 
-  // ★★ 0단계 — LLM이 섹션 헤더를 평문으로 쓰고 곧바로 <ul>/<table>을 붙이는 케이스 보정
-  // 예: "지원 기준<ul>..." → "**지원 기준**\n<ul>..."
-  // 예: "복귀 시점별 정산 범위 비교<table>..." → "**복귀 시점별 정산 범위 비교**\n<table>..."
-  // 짧은 한글 헤더 텍스트(공백 포함 최대 30자)가 <ul>/<ol>/<table> 직전에 붙어있는 경우만
-  // [^\n*><] : 시작은 개행/별표/꺾쇠 제외 (이전 태그의 </ul> 같은 게 헤더로 잡히지 않도록)
+  // ★★ 0단계 — 같은 줄 헤더: "지원 기준<ul>..." → "**지원 기준**\n\n<ul>..."
   result = result.replace(/([^\n*><][^\n<>]{0,29}?)(<(?:ul|ol|table)[^>]*>)/gi, (m, header, tag) => {
     const trimmed = header.trim();
     if (!trimmed) return m;
-    // 이미 markdown bold면 건드리지 않음
     if (/^\*\*.+\*\*$/.test(trimmed)) return m;
-    // 헤더에 HTML 태그 부스러기가 남았다면 건드리지 않음 (안전망)
     if (/[<>]/.test(trimmed)) return m;
     return `\n\n**${trimmed}**\n\n${tag}`;
   });
 
-  // ★ 강조 태그를 먼저 markdown으로 변환 (표/리스트 안의 굵은 글씨 보존을 위해 우선 처리)
+  // ★★ 0-2단계 — 줄바꿈 분리 헤더: "오류 해결 방법\n<ul>..." → "**오류 해결 방법**\n\n<ul>..."
+  result = result.replace(/(^|\n)([^\n*<>][^\n<>]{0,29})\n(<(?:ul|ol|table)[^>]*>)/g, (m, lead, header, tag) => {
+    const trimmed = header.trim();
+    if (!trimmed) return m;
+    if (/^\*\*.+\*\*$/.test(trimmed)) return m;
+    if (/[<>]/.test(trimmed)) return m;
+    if (/^📎/.test(trimmed)) return m;
+    return `${lead}**${trimmed}**\n\n${tag}`;
+  });
+
+  // 강조 태그
   result = result.replace(/<strong[^>]*>([\s\S]*?)<\/strong>/gi, '**$1**');
   result = result.replace(/<b[^>]*>([\s\S]*?)<\/b>/gi, '**$1**');
   result = result.replace(/<em[^>]*>([\s\S]*?)<\/em>/gi, '*$1*');
   result = result.replace(/<i[^>]*>([\s\S]*?)<\/i>/gi, '*$1*');
 
-  // ★ HTML 태그 → markdown 자동 변환 (LLM이 HTML로 답변한 경우)
-  // 표 변환 (<table>...<tbody>...</table> → markdown 표)
+  // 표 변환
   result = result.replace(/<table[^>]*>([\s\S]*?)<\/table>/gi, (match, content) => {
-    // thead 추출
     let headerRow = '';
     const theadMatch = content.match(/<thead[^>]*>([\s\S]*?)<\/thead>/i);
     if (theadMatch) {
@@ -1161,8 +815,6 @@ function postProcessKorean(text) {
         headerRow += '|' + headers.map(() => '------').join('|') + '|\n';
       }
     }
-    
-    // tbody (또는 직접 tr) 추출
     const bodyContent = content.replace(/<thead[^>]*>[\s\S]*?<\/thead>/i, '');
     const rows = bodyContent.match(/<tr[^>]*>([\s\S]*?)<\/tr>/gi) || [];
     const bodyRows = rows.map(row => {
@@ -1170,177 +822,97 @@ function postProcessKorean(text) {
       const cellTexts = cells.map(c => c.replace(/<[^>]*>/g, '').trim());
       return '| ' + cellTexts.join(' | ') + ' |';
     }).join('\n');
-    
     return '\n' + headerRow + bodyRows + '\n';
   });
   
-  // 목록 변환 (<ul>...<li>...</li>...</ul> → - 항목)
+  // 목록 변환
   result = result.replace(/<ul[^>]*>([\s\S]*?)<\/ul>/gi, (match, content) => {
     const items = content.match(/<li[^>]*>([\s\S]*?)<\/li>/gi) || [];
     return '\n' + items.map(item => '- ' + item.replace(/<[^>]*>/g, '').trim()).join('\n') + '\n';
   });
-  
   result = result.replace(/<ol[^>]*>([\s\S]*?)<\/ol>/gi, (match, content) => {
     const items = content.match(/<li[^>]*>([\s\S]*?)<\/li>/gi) || [];
     return '\n' + items.map((item, i) => `${i+1}. ` + item.replace(/<[^>]*>/g, '').trim()).join('\n') + '\n';
   });
-  
-  // 단독 li 변환 (목록 컨테이너 밖에 있는 경우)
   result = result.replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, '\n- $1');
-  
-  // 줄바꿈 태그
   result = result.replace(/<br\s*\/?>/gi, '\n');
   result = result.replace(/<\/?p[^>]*>/gi, '\n');
 
-  // ★★★ 최종 안전망: 위 변환에서 놓친 어떤 HTML 태그라도 강제 제거
-  // - 닫는 태그 누락, 비정상 중첩, 알 수 없는 태그명까지 모두 정리
-  // - <foo>, </foo>, <foo attr="x">, <foo/>, <foo /> 모든 형태 매칭
-  result = result.replace(/<\/?[a-zA-Z][a-zA-Z0-9]*(?:\s[^<>]*?)?\/?>/g, '');
-  // HTML 엔티티가 raw로 남아있는 경우도 정리 (LLM이 가끔 &lt;ul&gt; 형태로 출력)
-  result = result.replace(/&lt;\/?[a-zA-Z][a-zA-Z0-9]*(?:\s[^&]*?)?&gt;/g, '');
-  
-  // 일본어 → 한국어 변환
-  const jpReplacements = [
-    [/ただし[、,]?\s*/g, '다만, '],
-    [/しかし[、,]?\s*/g, '하지만, '],
-    [/また[、,]?\s*/g, '또한, '],
-    [/および/g, '및'],
-    [/なお[、,]?\s*/g, '참고로, '],
-    [/さらに[、,]?\s*/g, '추가로, '],
-    [/ところで[、,]?\s*/g, '그런데, '],
-    [/つまり[、,]?\s*/g, '즉, '],
-    [/もしくは/g, '또는'],
-    [/その他/g, '기타'],
-    [/について/g, '에 대해'],
-    [/に関して/g, '에 관해'],
-  ];
-  
-  // 영어 연결어 → 한국어
-  const enReplacements = [
-    [/\bHowever,\s*/g, '하지만, '],
-    [/\bhowever,\s*/g, '하지만, '],
-    [/\bHowever\b/g, '하지만'],
-    [/\bBut,\s*/g, '하지만, '],
-    [/\bMoreover,\s*/g, '또한, '],
-    [/\bFurthermore,\s*/g, '또한, '],
-    [/\bAdditionally,\s*/g, '추가로, '],
-    [/\bTherefore,\s*/g, '따라서, '],
-    [/\bIn addition,\s*/g, '또한, '],
-    [/\bAlso,\s*/g, '또한, '],
-    [/\bFor example,\s*/g, '예를 들어, '],
-    [/\bFor instance,\s*/g, '예를 들어, '],
-    [/\bIn other words,\s*/g, '즉, '],
-    [/\bThus,\s*/g, '따라서, '],
-    [/\bHence,\s*/g, '따라서, '],
-    [/\bMeanwhile,\s*/g, '한편, '],
-    [/\bOn the other hand,\s*/g, '반면, '],
-    [/\bIn conclusion,\s*/g, '결론적으로, '],
-    [/\bAs a result,\s*/g, '그 결과, '],
-  ];
-  
-  jpReplacements.forEach(([pattern, korean]) => {
-    result = result.replace(pattern, korean);
-  });
-  enReplacements.forEach(([pattern, korean]) => {
-    result = result.replace(pattern, korean);
-  });
-  
-  // 일본어 문자가 남아있으면 콘솔 경고
-  if (/[\u3040-\u309F\u30A0-\u30FF]/.test(result)) {
-    console.warn("⚠ 답변에 일본어 문자가 남아있습니다:", result.match(/[\u3040-\u309F\u30A0-\u30FF]+/g));
+  // ★★★ 최종 안전망: 남은 HTML 태그 반복 제거
+  for (let i = 0; i < 3; i++) {
+    const before = result;
+    result = result.replace(/<\/?[a-zA-Z][a-zA-Z0-9]*(?:\s[^<>]*?)?\/?>/g, '');
+    if (before === result) break;
   }
+  result = result.replace(/&lt;\/?[a-zA-Z][a-zA-Z0-9]*(?:\s[^&]*?)?&gt;/g, '');
+  result = result.replace(/&nbsp;/g, ' ');
+
+  // 일본어/영어 → 한국어
+  const jpReplacements = [
+    [/ただし[、,]?\s*/g, '다만, '], [/しかし[、,]?\s*/g, '하지만, '],
+    [/また[、,]?\s*/g, '또한, '], [/および/g, '및'],
+    [/なお[、,]?\s*/g, '참고로, '], [/さらに[、,]?\s*/g, '추가로, '],
+    [/つまり[、,]?\s*/g, '즉, '], [/もしくは/g, '또는'],
+    [/その他/g, '기타'], [/について/g, '에 대해'],
+  ];
+  const enReplacements = [
+    [/\bHowever,\s*/g, '하지만, '], [/\bhowever,\s*/g, '하지만, '],
+    [/\bHowever\b/g, '하지만'], [/\bMoreover,\s*/g, '또한, '],
+    [/\bAdditionally,\s*/g, '추가로, '], [/\bTherefore,\s*/g, '따라서, '],
+    [/\bAlso,\s*/g, '또한, '], [/\bFor example,\s*/g, '예를 들어, '],
+    [/\bThus,\s*/g, '따라서, '], [/\bAs a result,\s*/g, '그 결과, '],
+  ];
+  jpReplacements.forEach(([p, k]) => { result = result.replace(p, k); });
+  enReplacements.forEach(([p, k]) => { result = result.replace(p, k); });
   
-  // 여러 줄바꿈 정리
   result = result.replace(/\n{3,}/g, '\n\n');
-  
   return result.trim();
 }
 
-// 답변 캐싱 헬퍼
 function cacheAnswer(cacheKey, answer) {
   try {
     localStorage.setItem(cacheKey, JSON.stringify({ answer, ts: Date.now() }));
   } catch (e) {
-    // quota 초과 → 옛 답변 캐시 절반 정리 후 재시도
     if (e && (e.name === "QuotaExceededError" || /quota/i.test(e.message || ""))) {
-      const cleared = cleanupOldAnswerCache(0.5);
-      console.warn(`⚠ 답변 캐시 quota 초과 → 옛 답변 ${cleared}개 정리 후 재시도`);
-      try {
-        localStorage.setItem(cacheKey, JSON.stringify({ answer, ts: Date.now() }));
-      } catch (e2) {
-        console.warn("답변 캐시 저장 포기 (메모리에만 유지):", e2.message);
-      }
+      cleanupOldAnswerCache(0.5);
+      try { localStorage.setItem(cacheKey, JSON.stringify({ answer, ts: Date.now() })); } catch (e2) {}
     }
   }
 }
 
-// LZString 압축 캐시 로드 헬퍼 (압축/비압축 둘 다 호환)
 function lzGet(key) {
   const raw = localStorage.getItem(key);
   if (!raw) return null;
   if (!window.LZString) return raw;
-  // LZString.decompressFromUTF16은 압축된 데이터면 원본 문자열, 아니면 null/빈문자열 반환
   try {
     const decompressed = LZString.decompressFromUTF16(raw);
-    // 압축 풀린 결과가 유효한 JSON 시작 문자(예: [, {)면 압축본
-    if (decompressed && decompressed.length > 0 && (decompressed[0] === '[' || decompressed[0] === '{')) {
-      return decompressed;
-    }
-    // 폴백: 원본이 이미 평문 JSON
+    if (decompressed && decompressed.length > 0 && (decompressed[0] === '[' || decompressed[0] === '{')) return decompressed;
     return (raw[0] === '[' || raw[0] === '{') ? raw : null;
   } catch (_e) {
     return (raw && (raw[0] === '[' || raw[0] === '{')) ? raw : null;
   }
 }
 
-// 메타데이터 캐시 저장 시도 — 실패 시 단계적으로 옛 캐시 정리 후 재시도
 function trySaveMetaCache(metaJson, metaKey, timeKey, countKey, chunkCount) {
   const setAll = () => {
     localStorage.setItem(metaKey, metaJson);
     localStorage.setItem(timeKey, String(Date.now()));
     localStorage.setItem(countKey, String(chunkCount));
   };
-  // 시도 1: 그대로 저장
-  try {
-    setAll();
-    console.log(`✓ 메타데이터 캐시 저장 (${chunkCount}개)`);
-    return true;
-  } catch (e) {
-    if (!isQuotaError(e)) {
-      console.error("❌ 메타데이터 캐시 저장 실패 (quota 외):", e.message);
-      return false;
-    }
-  }
-  // 시도 2: 답변 캐시 전부 정리 후 재시도
-  const ansCleared = cleanupOldAnswerCache(1.0);
-  console.warn(`⚠ 메타 캐시 quota 초과 → 답변 캐시 ${ansCleared}개 정리 후 재시도`);
-  try {
-    setAll();
-    console.log(`✓ 메타데이터 캐시 저장 (${chunkCount}개, 답변 캐시 정리 후)`);
-    return true;
-  } catch (e) {
-    if (!isQuotaError(e)) return false;
-  }
-  // 시도 3: 임베딩 캐시도 정리 후 재시도 (검색은 메모리상 임베딩으로 가능)
+  try { setAll(); return true; } catch (e) { if (!isQuotaError(e)) return false; }
+  cleanupOldAnswerCache(1.0);
+  try { setAll(); return true; } catch (e) { if (!isQuotaError(e)) return false; }
   try {
     localStorage.removeItem("triplus_chunks_emb");
-    console.warn("⚠ 임베딩 캐시도 정리 (이번 세션은 메모리 임베딩 사용)");
     setAll();
-    console.log(`✓ 메타데이터 캐시 저장 (${chunkCount}개, 임베딩 캐시도 정리 후)`);
     return true;
-  } catch (e) {
-    console.error("❌ 메타데이터 캐시 저장 최종 실패. 이번 세션만 작동, 다음 방문 시 다시 로드됨:", e.message);
-    return false;
-  }
+  } catch (e) { return false; }
 }
 
 function isQuotaError(e) {
-  return e && (e.name === "QuotaExceededError"
-            || e.name === "NS_ERROR_DOM_QUOTA_REACHED"
-            || /quota/i.test(e.message || ""));
+  return e && (e.name === "QuotaExceededError" || e.name === "NS_ERROR_DOM_QUOTA_REACHED" || /quota/i.test(e.message || ""));
 }
 
-// 옛 답변 캐시 정리: ratio = 1.0이면 전부, 0.5면 오래된 절반만 삭제
 function cleanupOldAnswerCache(ratio) {
   const items = [];
   for (let i = 0; i < localStorage.length; i++) {
@@ -1349,75 +921,35 @@ function cleanupOldAnswerCache(ratio) {
       try {
         const obj = JSON.parse(localStorage.getItem(k));
         items.push({ key: k, ts: (obj && obj.ts) || 0 });
-      } catch (_e) {
-        items.push({ key: k, ts: 0 });
-      }
+      } catch (_e) { items.push({ key: k, ts: 0 }); }
     }
   }
-  // 오래된 순으로 정렬
   items.sort((a, b) => a.ts - b.ts);
   const removeCount = Math.max(1, Math.floor(items.length * ratio));
   let n = 0;
   for (let i = 0; i < removeCount && i < items.length; i++) {
-    localStorage.removeItem(items[i].key);
-    n++;
+    localStorage.removeItem(items[i].key); n++;
   }
   return n;
 }
 
-// ─── 콘솔 헬퍼 (F12에서 실행 가능) ────────────────────────────
-// 답변 캐시만 삭제
 window.clearAnswerCache = function() {
   const n = cleanupOldAnswerCache(1.0);
-  console.log(`✅ 답변 캐시 ${n}개 삭제 완료. 페이지를 새로고침하세요.`);
+  console.log(`✅ 답변 캐시 ${n}개 삭제. 페이지를 새로고침하세요.`);
   return n;
 };
 
-// 트리플러스 관련 모든 캐시 삭제 (자료/임베딩/답변 전부)
 window.clearAllCache = function() {
   const keys = [];
   for (let i = 0; i < localStorage.length; i++) {
     const k = localStorage.key(i);
-    if (k && (k.startsWith("triplus_") || k.startsWith("ans_"))) {
-      keys.push(k);
-    }
+    if (k && (k.startsWith("triplus_") || k.startsWith("ans_"))) keys.push(k);
   }
   keys.forEach(k => localStorage.removeItem(k));
-  console.log(`✅ 트리플러스 캐시 ${keys.length}개 삭제 완료. 페이지를 새로고침하세요.`);
+  console.log(`✅ 트리플러스 캐시 ${keys.length}개 삭제. 페이지를 새로고침하세요.`);
   return keys.length;
 };
 
-// 현재 캐시 용량 진단
-window.cacheUsage = function() {
-  let totalBytes = 0;
-  const buckets = { meta: 0, emb: 0, answer: 0, other: 0 };
-  const counts = { meta: 0, emb: 0, answer: 0, other: 0 };
-  for (let i = 0; i < localStorage.length; i++) {
-    const k = localStorage.key(i);
-    if (!k) continue;
-    const v = localStorage.getItem(k) || "";
-    // UTF-16 기준 대략 추정: 문자 수 × 2
-    const bytes = (k.length + v.length) * 2;
-    totalBytes += bytes;
-    let bucket = "other";
-    if (k === "triplus_chunks_meta") bucket = "meta";
-    else if (k === "triplus_chunks_emb") bucket = "emb";
-    else if (k.startsWith("ans_")) bucket = "answer";
-    buckets[bucket] += bytes;
-    counts[bucket]++;
-  }
-  const fmt = (b) => (b / 1024 / 1024).toFixed(2) + " MB";
-  console.log("📊 localStorage 사용량");
-  console.log(`  메타데이터 (chunks): ${fmt(buckets.meta)} (${counts.meta}개 키)`);
-  console.log(`  임베딩 (embeddings): ${fmt(buckets.emb)} (${counts.emb}개 키)`);
-  console.log(`  답변 캐시 (ans_*):   ${fmt(buckets.answer)} (${counts.answer}개 키)`);
-  console.log(`  기타:               ${fmt(buckets.other)} (${counts.other}개 키)`);
-  console.log(`  ─────────────────────────────`);
-  console.log(`  합계:               ${fmt(totalBytes)} / 약 5MB 한도`);
-  return { totalBytes, buckets, counts };
-};
-
-// 간단한 문자열 해시 (캐시 키용)
 function simpleHash(str) {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
@@ -1427,17 +959,10 @@ function simpleHash(str) {
   return Math.abs(hash).toString(36);
 }
 
-// ====================================================
 // Markdown 렌더링
-// ====================================================
 function renderMarkdown(md) {
-  // ★ 렌더링 직전 최종 sanitize: postProcessKorean이 어떤 경로로든 누락된 경우의 마지막 방어선
-  // - LLM이 출력했을 가능성이 있는 모든 raw HTML 태그를 markdown으로 변환하거나 제거
-  if (md && /<[a-zA-Z]/.test(md)) {
-    md = postProcessKorean(md);
-  }
+  if (md && /<[a-zA-Z]/.test(md)) md = postProcessKorean(md);
   let html = md;
-  // 표
   html = html.replace(/(\|[^\n]+\|\n\|[\s\-:|]+\|\n(?:\|[^\n]+\|\n?)+)/g, (table) => {
     const lines = table.trim().split("\n");
     const header = lines[0].split("|").filter(c => c.trim()).map(c => `<th>${escapeHtml(c.trim())}</th>`).join("");
@@ -1447,15 +972,12 @@ function renderMarkdown(md) {
     }).join("");
     return `<table><thead><tr>${header}</tr></thead><tbody>${rows}</tbody></table>`;
   });
-  // 헤딩
   html = html.replace(/^### (.+)$/gm, "<h3>$1</h3>");
   html = html.replace(/^## (.+)$/gm, "<h3>$1</h3>");
-  // 리스트
   html = html.replace(/(?:^- (.+)$\n?)+/gm, (m) => {
     const items = m.trim().split(/\n/).map(line => line.replace(/^- /, "").trim());
     return "<ul>" + items.map(i => `<li>${renderInline(i)}</li>`).join("") + "</ul>";
   });
-  // 줄바꿈
   html = html.split(/\n\n+/).map(p => {
     if (p.match(/^<(h\d|ul|ol|table|pre)/)) return p;
     return `<p>${renderInline(p)}</p>`;
@@ -1475,9 +997,6 @@ function escapeHtml(text) {
   return String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-// ====================================================
-// 출처 렌더링
-// ====================================================
 function renderSources(topChunks) {
   const list = document.getElementById("sourcesList");
   list.innerHTML = topChunks.map((x, i) => {
@@ -1521,7 +1040,6 @@ document.getElementById("searchInput").addEventListener("keydown", (e) => {
   if (e.key === "Enter") doSearch();
 });
 
-// 시작
 init();
 </script>
 
